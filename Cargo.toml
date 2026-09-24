@@ -1,0 +1,8 @@
+[package]
+name = "pqlens"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+arrow = { version = "60.0.0", features = ["prettyprint"] }
+parquet = "60.0.0"
