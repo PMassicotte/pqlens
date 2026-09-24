@@ -18,14 +18,21 @@ impl ParquetPreview {
     pub fn from_file(path: &str, page_size: usize) -> Result<Self, Box<dyn std::error::Error>> {
         let file = std::fs::File::open(path)?;
         let builder = ParquetRecordBatchReaderBuilder::try_new(file)?;
-        let reader = builder.with_batch_size(page_size).build()?;
 
         let mut preview = ParquetPreview {
             header: Vec::new(),
             rows: Vec::new(),
         };
 
+        preview.header = builder
+            .schema()
+            .fields()
+            .iter()
+            .map(|field| field.name().clone())
+            .collect();
+
         // Just use the first batch for now
+        let reader = builder.with_batch_size(page_size).build()?;
         for batch in reader.take(1) {
             let batch = batch?;
             preview.build_from_record_batch(&batch)?;
@@ -38,14 +45,6 @@ impl ParquetPreview {
         &mut self,
         batch: &arrow::record_batch::RecordBatch,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        // Extract header
-        self.header = batch
-            .schema()
-            .fields()
-            .iter()
-            .map(|field| field.name().clone())
-            .collect();
-
         let format_options = FormatOptions::default();
 
         let formatters: Vec<_> = batch
