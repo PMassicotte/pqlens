@@ -41,13 +41,7 @@ impl SortState {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut preview = ParquetPreview::from_file("./data/sample-users.parquet", 1)?;
-
-    println!("{:?}", preview.header());
-
-    for row in preview.rows() {
-        println!("{:?}", row);
-    }
+    let mut preview = ParquetPreview::from_file("./data/sample-users.parquet", 15)?;
 
     color_eyre::install()?;
 
@@ -70,6 +64,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     KeyCode::Char('h') | KeyCode::Left => table_state.select_previous_column(),
                     KeyCode::Char('g') => table_state.select_first(),
                     KeyCode::Char('G') => table_state.select_last(),
+                    KeyCode::PageDown => {
+                        preview.next_batch()?;
+                        match sort {
+                            Some(s) => preview.sort_by(s.col, s.dir == SortDir::Desc)?,
+                            None => preview.clear_sort(),
+                        }
+                    }
                     KeyCode::Char('s') => {
                         let col = table_state.selected_column().unwrap_or(0);
                         sort = SortState::next(sort, col);

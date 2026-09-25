@@ -1,4 +1,4 @@
-use arrow::compute::{SortOptions, concat_batches, sort_to_indices};
+use arrow::compute::{SortOptions, sort_to_indices};
 use arrow::error::ArrowError;
 use arrow::record_batch::RecordBatch;
 use arrow::util::display::{ArrayFormatter, FormatOptions};
@@ -7,13 +7,23 @@ use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 pub struct ParquetPreview {
     header: Vec<String>,
     rows: Vec<Vec<String>>,
-    batch: RecordBatch,
+    batches: Vec<RecordBatch>,
     order: Vec<usize>,
+    current_batch: usize,
 }
 
 impl ParquetPreview {
     pub fn header(&self) -> &[String] {
         &self.header
+    }
+
+    pub fn next_batch(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        if self.current_batch + 1 < self.batches.len() {
+            self.current_batch += 1;
+            self.rows = format_rows(&self.batches[self.current_batch])?;
+        }
+
+        Ok(())
     }
 
     pub fn sort_by(&mut self, col: usize, descending: bool) -> Result<(), ArrowError> {
@@ -22,7 +32,11 @@ impl ParquetPreview {
             nulls_first: false,
         };
 
-        let idx = sort_to_indices(self.batch.column(col), Some(opts), None)?;
+        let idx = sort_to_indices(
+            self.batches[self.current_batch].column(col),
+            Some(opts),
+            None,
+        )?;
 
         self.order = idx.values().iter().map(|&i| i as usize).collect();
 
@@ -52,15 +66,15 @@ impl ParquetPreview {
 
         // Only preview the first batches for now
         let reader = builder.with_batch_size(batch_size).build()?;
-        let batches = reader.take(20).collect::<Result<Vec<_>, _>>()?;
-        let batch = concat_batches(&schema, &batches)?;
-        let rows = format_rows(&batch)?;
+        let batches: Vec<RecordBatch> = reader.collect::<Result<_, _>>()?;
+        let rows = format_rows(&batches[0])?;
 
         let mut preview = ParquetPreview {
             header,
             rows,
-            batch,
+            batches,
             order: Vec::new(),
+            current_batch: 0,
         };
 
         preview.clear_sort();
