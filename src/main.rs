@@ -93,7 +93,7 @@ fn render_table(
                 _ => title.clone(),
             },
         ))
-        .style(Style::new().bold())
+        .style(Style::new().bold().fg(Color::Red))
         .bottom_margin(1);
 
     let rows: Vec<Row> = preview
@@ -112,7 +112,7 @@ fn render_table(
         .column_spacing(1)
         .style(Color::White)
         .row_highlight_style(Style::new().on_black().bold())
-        .column_highlight_style(Color::Gray)
+        .column_highlight_style(Style::new().fg(Color::Blue))
         .cell_highlight_style(Style::new().reversed().yellow());
 
     frame.render_stateful_widget(table, area, table_state);
