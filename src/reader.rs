@@ -19,6 +19,10 @@ impl ParquetPreview {
         &self.header
     }
 
+    pub fn total_rows(&self) -> usize {
+        self.batches.iter().map(|batch| batch.num_rows()).sum()
+    }
+
     pub fn sort_state(&self) -> Option<SortState> {
         self.sort_state
     }

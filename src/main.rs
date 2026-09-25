@@ -59,12 +59,12 @@ fn render(frame: &mut Frame, table_state: &mut TableState, preview: &ParquetPrev
     let [top, main] = frame.area().layout(&layout);
 
     let title = Line::from_iter([
-        Span::from("Table Widget").bold(),
         Span::from(" (Press 'q' to quit, arrow keys to navigate, 's' to sort)"),
         Span::from(format!(
-            " (Batch {}/{})",
+            " (Batch {}/{}: {} rows in total)",
             preview.current_batch() + 1,
-            preview.num_batches()
+            preview.num_batches(),
+            preview.total_rows()
         )),
     ]);
     frame.render_widget(title.centered(), top);
