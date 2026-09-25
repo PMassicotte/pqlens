@@ -56,6 +56,16 @@ impl ParquetPreview {
         Ok(())
     }
 
+    pub fn previous_batch(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        if self.current_batch > 0 {
+            self.current_batch -= 1;
+            self.rows = format_rows(&self.batches[self.current_batch])?;
+            self.apply_sort()?;
+        }
+
+        Ok(())
+    }
+
     fn sort_by(&mut self, col: usize, descending: bool) -> Result<(), ArrowError> {
         let opts = SortOptions {
             descending,

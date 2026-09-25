@@ -38,6 +38,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         preview.next_batch()?;
                         table_state.select_first();
                     }
+                    KeyCode::PageUp => {
+                        preview.previous_batch()?;
+                        table_state.select_first();
+                    }
                     KeyCode::Char('s') => {
                         let col = table_state.selected_column().unwrap_or(0);
                         preview.cycle_sort(col)?;
