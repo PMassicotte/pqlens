@@ -28,6 +28,14 @@ impl ParquetPreview {
         self.apply_sort()
     }
 
+    pub fn current_batch(&self) -> usize {
+        self.current_batch
+    }
+
+    pub fn num_batches(&self) -> usize {
+        self.batches.len()
+    }
+
     fn apply_sort(&mut self) -> Result<(), ArrowError> {
         match self.sort_state {
             Some(s) => self.sort_by(s.col(), s.dir() == SortDir::Desc),
