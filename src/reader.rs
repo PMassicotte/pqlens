@@ -15,7 +15,7 @@ impl ParquetPreview {
         &self.rows
     }
 
-    pub fn from_file(path: &str, page_size: usize) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn from_file(path: &str, batch_size: usize) -> Result<Self, Box<dyn std::error::Error>> {
         let file = std::fs::File::open(path)?;
         let builder = ParquetRecordBatchReaderBuilder::try_new(file)?;
 
@@ -32,7 +32,7 @@ impl ParquetPreview {
             .collect();
 
         // Just use the first batch for now
-        let reader = builder.with_batch_size(page_size).build()?;
+        let reader = builder.with_batch_size(batch_size).build()?;
         for batch in reader.take(1) {
             let batch = batch?;
             preview.build_from_record_batch(&batch)?;
