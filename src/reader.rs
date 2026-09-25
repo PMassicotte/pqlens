@@ -33,7 +33,7 @@ impl ParquetPreview {
 
         // Just use the first batch for now
         let reader = builder.with_batch_size(batch_size).build()?;
-        for batch in reader.take(1) {
+        for batch in reader.take(20) {
             let batch = batch?;
             preview.build_from_record_batch(&batch)?;
         }

@@ -5,4 +5,7 @@ edition = "2024"
 
 [dependencies]
 arrow = { version = "60.0.0" }
+color-eyre = "0.6.5"
+crossterm = "0.29.0"
 parquet = "60.0.0"
+ratatui = "0.30.2"
