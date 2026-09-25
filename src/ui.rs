@@ -1,28 +1,44 @@
+use crate::keymaps::render_keymaps;
 use crate::reader::ParquetPreview;
 use crate::sorter::SortDir;
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
-use ratatui::style::{Color, Style};
-use ratatui::text::{Line, Span};
+use ratatui::style::{Color, Style, Stylize};
+use ratatui::text::{Line, Text};
 use ratatui::widgets::{Row, Table, TableState};
 
 /// Render the UI with a table.
-pub fn render(frame: &mut Frame, table_state: &mut TableState, preview: &ParquetPreview) {
-    let layout = Layout::vertical([Constraint::Length(1), Constraint::Fill(1)]).spacing(1);
+pub fn render(
+    frame: &mut Frame,
+    table_state: &mut TableState,
+    preview: &ParquetPreview,
+    show_keymaps: bool,
+) {
+    let layout = Layout::vertical([Constraint::Length(2), Constraint::Fill(1)]).spacing(1);
+
     let [top, main] = frame.area().layout(&layout);
 
-    let title = Line::from_iter([
-        Span::from(" (Press 'q' to quit, arrow keys to navigate, 's' to sort)"),
-        Span::from(format!(
-            " (Batch {}/{}: {} rows in total)",
-            preview.current_batch() + 1,
-            preview.num_batches(),
-            preview.total_rows()
-        )),
+    let title = Text::from(vec![
+        Line::from(" Press 'q' to quit, arrow keys to navigate, 's' to sort, '?' for keymaps"),
+        Line::from(
+            format!(
+                " Batch {}/{}: {} rows in total",
+                preview.current_batch() + 1,
+                preview.num_batches(),
+                preview.total_rows()
+            )
+            .bold()
+            .fg(Color::Green),
+        ),
     ]);
+
     frame.render_widget(title.centered(), top);
 
     render_table(frame, main, table_state, preview);
+
+    if show_keymaps {
+        render_keymaps(frame);
+    }
 }
 
 /// Render a table with some rows and columns.

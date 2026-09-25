@@ -1,3 +1,4 @@
+mod keymaps;
 mod reader;
 mod sorter;
 mod ui;
@@ -19,9 +20,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     table_state.select_first();
     table_state.select_first_column();
 
+    let mut show_keymaps = false;
+
     ratatui::run(|terminal| {
         loop {
-            terminal.draw(|frame| render(frame, &mut table_state, &preview))?;
+            terminal.draw(|frame| render(frame, &mut table_state, &preview, show_keymaps))?;
             if let Some(key) = event::read()?.as_key_press_event() {
                 match key.code {
                     KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
@@ -31,6 +34,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     KeyCode::Char('h') | KeyCode::Left => table_state.select_previous_column(),
                     KeyCode::Char('g') => table_state.select_first(),
                     KeyCode::Char('G') => table_state.select_last(),
+                    KeyCode::Char('?') => show_keymaps = !show_keymaps,
                     KeyCode::PageDown => {
                         preview.next_batch()?;
                         table_state.select_first();
