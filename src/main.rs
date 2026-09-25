@@ -12,8 +12,36 @@ use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Row, Table, TableState};
 
+#[derive(Clone, Copy, PartialEq)]
+enum SortDir {
+    Asc,
+    Desc,
+}
+
+#[derive(Clone, Copy)]
+struct SortState {
+    col: usize,
+    dir: SortDir,
+}
+
+impl SortState {
+    fn next(current: Option<SortState>, col: usize) -> Option<SortState> {
+        match current {
+            Some(s) if s.col == col && s.dir == SortDir::Asc => Some(SortState {
+                col,
+                dir: SortDir::Desc,
+            }),
+            Some(s) if s.col == col && s.dir == SortDir::Desc => None,
+            _ => Some(SortState {
+                col,
+                dir: SortDir::Asc,
+            }),
+        }
+    }
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let preview = ParquetPreview::from_file("./data/sample-users.parquet", 1)?;
+    let mut preview = ParquetPreview::from_file("./data/sample-users.parquet", 1)?;
 
     println!("{:?}", preview.header());
 
@@ -28,9 +56,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     table_state.select_first();
     table_state.select_first_column();
 
+    let mut sort: Option<SortState> = None;
+
     ratatui::run(|terminal| {
         loop {
-            terminal.draw(|frame| render(frame, &mut table_state, &preview))?;
+            terminal.draw(|frame| render(frame, &mut table_state, &preview, sort))?;
             if let Some(key) = event::read()?.as_key_press_event() {
                 match key.code {
                     KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
@@ -40,6 +70,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     KeyCode::Char('h') | KeyCode::Left => table_state.select_previous_column(),
                     KeyCode::Char('g') => table_state.select_first(),
                     KeyCode::Char('G') => table_state.select_last(),
+                    KeyCode::Char('s') => {
+                        let col = table_state.selected_column().unwrap_or(0);
+                        sort = SortState::next(sort, col);
+                        match sort {
+                            Some(s) => preview.sort_by(s.col, s.dir == SortDir::Desc)?,
+                            None => preview.clear_sort(),
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -48,41 +86,57 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// Render the UI with a table.
-fn render(frame: &mut Frame, table_state: &mut TableState, preview: &ParquetPreview) {
+fn render(
+    frame: &mut Frame,
+    table_state: &mut TableState,
+    preview: &ParquetPreview,
+    sort: Option<SortState>,
+) {
     let layout = Layout::vertical([Constraint::Length(1), Constraint::Fill(1)]).spacing(1);
     let [top, main] = frame.area().layout(&layout);
 
     let title = Line::from_iter([
         Span::from("Table Widget").bold(),
-        Span::from(" (Press 'q' to quit and arrow keys to navigate)"),
+        Span::from(" (Press 'q' to quit, arrow keys to navigate, 's' to sort)"),
     ]);
     frame.render_widget(title.centered(), top);
 
-    render_table(frame, main, table_state, preview);
+    render_table(frame, main, table_state, preview, sort);
 }
 
 /// Render a table with some rows and columns.
-pub fn render_table(
+fn render_table(
     frame: &mut Frame,
     area: Rect,
     table_state: &mut TableState,
     preview: &ParquetPreview,
+    sort: Option<SortState>,
 ) {
-    let header = Row::new(preview.header().iter().map(|title| title.as_str()))
-        .style(Style::new().bold())
-        .bottom_margin(1);
+    let header = Row::new(
+        preview
+            .header()
+            .iter()
+            .enumerate()
+            .map(|(i, title)| match sort {
+                Some(s) if s.col == i => {
+                    let arrow = if s.dir == SortDir::Asc { "▲" } else { "▼" };
+                    format!("{title} {arrow}")
+                }
+                _ => title.clone(),
+            }),
+    )
+    .style(Style::new().bold())
+    .bottom_margin(1);
 
     let rows: Vec<Row> = preview
         .rows()
-        .iter()
         .map(|row| Row::new(row.iter().map(|r| r.as_str())))
         .collect();
 
-    // Try to use the header to build a potentially good array of widths
     let widths: Vec<Constraint> = preview
         .header()
         .iter()
-        .map(|title| Constraint::Min(title.len() as u16))
+        .map(|title| Constraint::Min(title.len() as u16 + 2))
         .collect();
 
     let table = Table::new(rows, widths)
