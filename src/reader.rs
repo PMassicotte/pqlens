@@ -70,6 +70,22 @@ impl ParquetPreview {
         Ok(())
     }
 
+    pub fn first_batch(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        self.current_batch = 0;
+        self.rows = format_rows(&self.batches[self.current_batch])?;
+        self.apply_sort()?;
+
+        Ok(())
+    }
+
+    pub fn last_batch(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        self.current_batch = self.batches.len() - 1;
+        self.rows = format_rows(&self.batches[self.current_batch])?;
+        self.apply_sort()?;
+
+        Ok(())
+    }
+
     fn sort_by(&mut self, col: usize, descending: bool) -> Result<(), ArrowError> {
         let opts = SortOptions {
             descending,

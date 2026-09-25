@@ -10,7 +10,7 @@ use crossterm::event::{self, KeyCode};
 use ratatui::widgets::TableState;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut preview = ParquetPreview::from_file("./data/sample-users.parquet", 15)?;
+    let mut preview = ParquetPreview::from_file("./data/sample-users.parquet", 45)?;
 
     color_eyre::install()?;
 
@@ -37,6 +37,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     KeyCode::PageUp => {
                         preview.previous_batch()?;
+                        table_state.select_first();
+                    }
+                    KeyCode::Home => {
+                        preview.first_batch()?;
+                        table_state.select_first();
+                    }
+                    KeyCode::End => {
+                        preview.last_batch()?;
                         table_state.select_first();
                     }
                     KeyCode::Char('s') => {
