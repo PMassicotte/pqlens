@@ -1,9 +1,14 @@
+use arrow::compute::{SortOptions, concat_batches, sort_to_indices};
+use arrow::error::ArrowError;
+use arrow::record_batch::RecordBatch;
 use arrow::util::display::{ArrayFormatter, FormatOptions};
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 
 pub struct ParquetPreview {
     header: Vec<String>,
     rows: Vec<Vec<String>>,
+    batch: RecordBatch,
+    order: Vec<usize>,
 }
 
 impl ParquetPreview {
@@ -11,57 +16,76 @@ impl ParquetPreview {
         &self.header
     }
 
-    pub fn rows(&self) -> &[Vec<String>] {
-        &self.rows
+    pub fn sort_by(&mut self, col: usize, descending: bool) -> Result<(), ArrowError> {
+        let opts = SortOptions {
+            descending,
+            nulls_first: false,
+        };
+
+        let idx = sort_to_indices(self.batch.column(col), Some(opts), None)?;
+
+        self.order = idx.values().iter().map(|&i| i as usize).collect();
+
+        Ok(())
+    }
+
+    /// Clears any sorting and resets the order to the original row order.
+    pub fn clear_sort(&mut self) {
+        self.order = (0..self.rows.len()).collect();
+    }
+
+    /// Returns an iterator over the rows in the current order.
+    pub fn rows(&self) -> impl Iterator<Item = &Vec<String>> {
+        self.order.iter().map(|&i| &self.rows[i])
     }
 
     pub fn from_file(path: &str, batch_size: usize) -> Result<Self, Box<dyn std::error::Error>> {
         let file = std::fs::File::open(path)?;
         let builder = ParquetRecordBatchReaderBuilder::try_new(file)?;
+        let schema = builder.schema().clone();
 
-        let mut preview = ParquetPreview {
-            header: Vec::new(),
-            rows: Vec::new(),
-        };
-
-        preview.header = builder
-            .schema()
+        let header = schema
             .fields()
             .iter()
             .map(|field| field.name().clone())
             .collect();
 
-        // Just use the first batch for now
+        // Only preview the first batches for now
         let reader = builder.with_batch_size(batch_size).build()?;
-        for batch in reader.take(1) {
-            let batch = batch?;
-            preview.build_from_record_batch(&batch)?;
-        }
+        let batches = reader.take(20).collect::<Result<Vec<_>, _>>()?;
+        let batch = concat_batches(&schema, &batches)?;
+        let rows = format_rows(&batch)?;
+
+        let mut preview = ParquetPreview {
+            header,
+            rows,
+            batch,
+            order: Vec::new(),
+        };
+
+        preview.clear_sort();
 
         Ok(preview)
     }
+}
 
-    fn build_from_record_batch(
-        &mut self,
-        batch: &arrow::record_batch::RecordBatch,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let format_options = FormatOptions::default();
+fn format_rows(batch: &RecordBatch) -> Result<Vec<Vec<String>>, ArrowError> {
+    let format_options = FormatOptions::default();
 
-        let formatters: Vec<_> = batch
-            .columns()
-            .iter()
-            .map(|column| ArrayFormatter::try_new(column, &format_options))
-            .collect::<Result<_, _>>()?;
+    let formatters: Vec<_> = batch
+        .columns()
+        .iter()
+        .map(|column| ArrayFormatter::try_new(column, &format_options))
+        .collect::<Result<_, _>>()?;
 
-        // Extract rows
-        for row_index in 0..batch.num_rows() {
-            let row = formatters
+    let rows = (0..batch.num_rows())
+        .map(|row_index| {
+            formatters
                 .iter()
                 .map(|formatter| formatter.value(row_index).to_string())
-                .collect();
-            self.rows.push(row);
-        }
+                .collect()
+        })
+        .collect();
 
-        Ok(())
-    }
+    Ok(rows)
 }
