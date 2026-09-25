@@ -1,3 +1,4 @@
+use crate::sorter::{SortDir, SortState};
 use arrow::compute::{SortOptions, sort_to_indices};
 use arrow::error::ArrowError;
 use arrow::record_batch::RecordBatch;
@@ -10,6 +11,7 @@ pub struct ParquetPreview {
     batches: Vec<RecordBatch>,
     order: Vec<usize>,
     current_batch: usize,
+    sort_state: Option<SortState>,
 }
 
 impl ParquetPreview {
@@ -17,16 +19,36 @@ impl ParquetPreview {
         &self.header
     }
 
+    pub fn sort_state(&self) -> Option<SortState> {
+        self.sort_state
+    }
+
+    pub fn cycle_sort(&mut self, col: usize) -> Result<(), ArrowError> {
+        self.sort_state = SortState::next(self.sort_state, col);
+        self.apply_sort()
+    }
+
+    fn apply_sort(&mut self) -> Result<(), ArrowError> {
+        match self.sort_state {
+            Some(s) => self.sort_by(s.col(), s.dir() == SortDir::Desc),
+            None => {
+                self.clear_sort();
+                Ok(())
+            }
+        }
+    }
+
     pub fn next_batch(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         if self.current_batch + 1 < self.batches.len() {
             self.current_batch += 1;
             self.rows = format_rows(&self.batches[self.current_batch])?;
+            self.apply_sort()?;
         }
 
         Ok(())
     }
 
-    pub fn sort_by(&mut self, col: usize, descending: bool) -> Result<(), ArrowError> {
+    fn sort_by(&mut self, col: usize, descending: bool) -> Result<(), ArrowError> {
         let opts = SortOptions {
             descending,
             nulls_first: false,
@@ -44,7 +66,7 @@ impl ParquetPreview {
     }
 
     /// Clears any sorting and resets the order to the original row order.
-    pub fn clear_sort(&mut self) {
+    fn clear_sort(&mut self) {
         self.order = (0..self.rows.len()).collect();
     }
 
@@ -75,6 +97,7 @@ impl ParquetPreview {
             batches,
             order: Vec::new(),
             current_batch: 0,
+            sort_state: None,
         };
 
         preview.clear_sort();
