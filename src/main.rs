@@ -11,7 +11,12 @@ use crossterm::event::{self, KeyCode};
 use ratatui::widgets::TableState;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut preview = ParquetPreview::from_file("./data/sample-users.parquet", 45)?;
+    let parquet_file_path = match std::env::args().nth(1) {
+        Some(path) => path,
+        None => "./data/sample-users.parquet".to_string(),
+    };
+
+    let mut preview = ParquetPreview::from_file(&parquet_file_path, 45)?;
 
     color_eyre::install()?;
 
