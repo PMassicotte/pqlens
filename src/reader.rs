@@ -19,6 +19,7 @@ pub struct ParquetPreview {
     chunk: RecordBatch,
     chunk_idx: Option<usize>,
     header: Vec<String>,
+    column_types: Vec<String>,
     rows: Vec<Vec<String>>,
     view: RecordBatch,
     order: Vec<usize>,
@@ -33,6 +34,10 @@ impl ParquetPreview {
 
     pub fn total_rows(&self) -> usize {
         self.metadata.metadata().file_metadata().num_rows() as usize
+    }
+
+    pub fn column_types(&self) -> &[String] {
+        &self.column_types
     }
 
     pub fn sort_state(&self) -> Option<SortState> {
@@ -188,6 +193,13 @@ impl ParquetPreview {
             .map(|field| field.name().clone())
             .collect();
 
+        let column_types = metadata
+            .schema()
+            .fields
+            .iter()
+            .map(|f| f.data_type().to_string())
+            .collect();
+
         let mut preview = ParquetPreview {
             path: path.to_string(),
             batch_size,
@@ -196,6 +208,7 @@ impl ParquetPreview {
             chunk: RecordBatch::new_empty(schema.clone()),
             chunk_idx: None,
             header,
+            column_types,
             rows: Vec::new(),
             view: RecordBatch::new_empty(schema),
             order: Vec::new(),

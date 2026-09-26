@@ -4,8 +4,8 @@ use crate::sorter::SortDir;
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Style, Stylize};
-use ratatui::text::{Line, Text};
-use ratatui::widgets::{Row, Table, TableState};
+use ratatui::text::{Line, Span, Text};
+use ratatui::widgets::{Cell, Row, Table, TableState};
 
 /// Render the UI with a table.
 pub fn render(
@@ -48,22 +48,36 @@ fn render_table(
     table_state: &mut TableState,
     preview: &ParquetPreview,
 ) {
-    let header =
-        Row::new(preview.header().iter().enumerate().map(
-            |(i, title)| match preview.sort_state() {
-                Some(s) if s.col() == i => {
-                    let arrow = if s.dir() == SortDir::Asc {
-                        "▲"
-                    } else {
-                        "▼"
-                    };
-                    format!("{title} {arrow}")
-                }
-                _ => title.clone(),
-            },
-        ))
-        .style(Style::new().bold().fg(Color::Red))
-        .bottom_margin(1);
+    let header = Row::new(
+        preview
+            .header()
+            .iter()
+            .enumerate()
+            .zip(preview.column_types().iter())
+            .map(|((i, title), column_type)| {
+                let title = match preview.sort_state() {
+                    Some(s) if s.col() == i => {
+                        let arrow = match s.dir() {
+                            SortDir::Asc => " ▲",
+                            SortDir::Desc => " ▼",
+                        };
+
+                        format!("{title}{arrow}")
+                    }
+                    _ => title.clone(),
+                };
+
+                Cell::from(vec![
+                    Line::from(Span::styled(title, Style::default().fg(Color::Red).bold())),
+                    Line::from(Span::styled(
+                        column_type.as_str(),
+                        Style::default().fg(Color::LightYellow).italic(),
+                    )),
+                ])
+            }),
+    )
+    .height(2)
+    .bottom_margin(1);
 
     let rows: Vec<Row> = preview
         .rows()
