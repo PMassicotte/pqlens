@@ -1,18 +1,29 @@
 use crate::sorter::{SortDir, SortState};
-use arrow::compute::{SortOptions, sort_to_indices};
+use arrow::compute::{SortOptions, concat_batches, sort_to_indices};
 use arrow::error::ArrowError;
 use arrow::record_batch::RecordBatch;
 use arrow::util::display::{ArrayFormatter, FormatOptions};
-use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
+use parquet::arrow::arrow_reader::{
+    ArrowReaderMetadata, ArrowReaderOptions, ParquetRecordBatchReaderBuilder,
+};
+use parquet::file::metadata::PageIndexPolicy;
+use std::fs::File;
+
+const BATCHES_PER_CHUNK: usize = 100;
 
 pub struct ParquetPreview {
+    path: String,
+    batch_size: usize,
+    metadata: ArrowReaderMetadata,
+    row_group_starts: Vec<usize>,
+    chunk: RecordBatch,
+    chunk_idx: Option<usize>,
     header: Vec<String>,
     rows: Vec<Vec<String>>,
-    batches: Vec<RecordBatch>,
+    batch: RecordBatch,
     order: Vec<usize>,
     current_batch: usize,
     sort_state: Option<SortState>,
-    total_rows: usize,
 }
 
 impl ParquetPreview {
@@ -21,7 +32,7 @@ impl ParquetPreview {
     }
 
     pub fn total_rows(&self) -> usize {
-        self.total_rows
+        self.metadata.metadata().file_metadata().num_rows() as usize
     }
 
     pub fn sort_state(&self) -> Option<SortState> {
@@ -38,7 +49,7 @@ impl ParquetPreview {
     }
 
     pub fn num_batches(&self) -> usize {
-        self.batches.len()
+        self.total_rows().div_ceil(self.batch_size)
     }
 
     fn apply_sort(&mut self) -> Result<(), ArrowError> {
@@ -52,10 +63,8 @@ impl ParquetPreview {
     }
 
     pub fn next_batch(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        if self.current_batch + 1 < self.batches.len() {
-            self.current_batch += 1;
-            self.rows = format_rows(&self.batches[self.current_batch])?;
-            self.apply_sort()?;
+        if self.current_batch + 1 < self.num_batches() {
+            self.load_batch(self.current_batch + 1)?;
         }
 
         Ok(())
@@ -63,25 +72,40 @@ impl ParquetPreview {
 
     pub fn previous_batch(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         if self.current_batch > 0 {
-            self.current_batch -= 1;
-            self.rows = format_rows(&self.batches[self.current_batch])?;
-            self.apply_sort()?;
+            self.load_batch(self.current_batch - 1)?;
         }
 
         Ok(())
     }
 
     pub fn first_batch(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        self.current_batch = 0;
-        self.rows = format_rows(&self.batches[self.current_batch])?;
-        self.apply_sort()?;
-
-        Ok(())
+        self.load_batch(0)
     }
 
     pub fn last_batch(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        self.current_batch = self.batches.len() - 1;
-        self.rows = format_rows(&self.batches[self.current_batch])?;
+        self.load_batch(self.num_batches().saturating_sub(1))
+    }
+
+    fn load_batch(&mut self, idx: usize) -> Result<(), Box<dyn std::error::Error>> {
+        let chunk_idx = idx / BATCHES_PER_CHUNK;
+        let chunk_rows = BATCHES_PER_CHUNK * self.batch_size;
+
+        if self.chunk_idx != Some(chunk_idx) {
+            let start = chunk_idx * chunk_rows;
+            let len = chunk_rows.min(self.total_rows().saturating_sub(start));
+            self.chunk = self.read_rows(start, len)?;
+            self.chunk_idx = Some(chunk_idx);
+        }
+
+        let offset = (idx % BATCHES_PER_CHUNK) * self.batch_size;
+
+        let len = self
+            .batch_size
+            .min(self.chunk.num_rows().saturating_sub(offset));
+
+        self.batch = self.chunk.slice(offset, len);
+        self.current_batch = idx;
+        self.rows = format_rows(&self.batch)?;
         self.apply_sort()?;
 
         Ok(())
@@ -93,11 +117,7 @@ impl ParquetPreview {
             nulls_first: false,
         };
 
-        let idx = sort_to_indices(
-            self.batches[self.current_batch].column(col),
-            Some(opts),
-            None,
-        )?;
+        let idx = sort_to_indices(self.batch.column(col), Some(opts), None)?;
 
         self.order = idx.values().iter().map(|&i| i as usize).collect();
 
@@ -114,13 +134,53 @@ impl ParquetPreview {
         self.order.iter().map(|&i| &self.rows[i])
     }
 
+    /// Reads `len` rows starting at row `start`, decoding only the row groups that contain them.
+    fn read_rows(
+        &self,
+        start: usize,
+        len: usize,
+    ) -> Result<RecordBatch, Box<dyn std::error::Error>> {
+        let schema = self.metadata.schema().clone();
+
+        if len == 0 {
+            return Ok(RecordBatch::new_empty(schema));
+        }
+
+        let end = start + len;
+        let first_rg = self.row_group_starts.partition_point(|&s| s <= start) - 1;
+        let last_rg = self.row_group_starts.partition_point(|&s| s < end) - 1;
+
+        let batches = ParquetRecordBatchReaderBuilder::new_with_metadata(
+            File::open(&self.path)?,
+            self.metadata.clone(),
+        )
+        .with_row_groups((first_rg..=last_rg).collect())
+        .with_offset(start - self.row_group_starts[first_rg])
+        .with_limit(len)
+        .with_batch_size(len)
+        .build()?
+        .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(concat_batches(&schema, &batches)?)
+    }
+
     pub fn from_file(path: &str, batch_size: usize) -> Result<Self, Box<dyn std::error::Error>> {
-        let file = std::fs::File::open(path)?;
-        let builder = ParquetRecordBatchReaderBuilder::try_new(file)?;
+        let options = ArrowReaderOptions::new().with_page_index_policy(PageIndexPolicy::Optional);
+        let metadata = ArrowReaderMetadata::load(&File::open(path)?, options)?;
+        let schema = metadata.schema().clone();
 
-        let total_rows = builder.metadata().file_metadata().num_rows() as usize;
-
-        let schema = builder.schema().clone();
+        // Precompute the starting row index of each row group for later use in determining which
+        // row groups to read for a given batch of rows.
+        let row_group_starts = metadata
+            .metadata()
+            .row_groups()
+            .iter()
+            .scan(0, |acc, rg| {
+                let start = *acc;
+                *acc += rg.num_rows() as usize;
+                Some(start)
+            })
+            .collect();
 
         let header = schema
             .fields()
@@ -128,22 +188,22 @@ impl ParquetPreview {
             .map(|field| field.name().clone())
             .collect();
 
-        // Only preview the first batches for now
-        let reader = builder.with_batch_size(batch_size).build()?;
-        let batches: Vec<RecordBatch> = reader.collect::<Result<_, _>>()?;
-        let rows = format_rows(&batches[0])?;
-
         let mut preview = ParquetPreview {
+            path: path.to_string(),
+            batch_size,
+            metadata,
+            row_group_starts,
+            chunk: RecordBatch::new_empty(schema.clone()),
+            chunk_idx: None,
             header,
-            rows,
-            batches,
+            rows: Vec::new(),
+            batch: RecordBatch::new_empty(schema),
             order: Vec::new(),
             current_batch: 0,
             sort_state: None,
-            total_rows,
         };
 
-        preview.clear_sort();
+        preview.load_batch(0)?;
 
         Ok(preview)
     }
