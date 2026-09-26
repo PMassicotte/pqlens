@@ -12,6 +12,7 @@ pub struct ParquetPreview {
     order: Vec<usize>,
     current_batch: usize,
     sort_state: Option<SortState>,
+    total_rows: usize,
 }
 
 impl ParquetPreview {
@@ -20,7 +21,7 @@ impl ParquetPreview {
     }
 
     pub fn total_rows(&self) -> usize {
-        self.batches.iter().map(|batch| batch.num_rows()).sum()
+        self.total_rows
     }
 
     pub fn sort_state(&self) -> Option<SortState> {
@@ -116,6 +117,9 @@ impl ParquetPreview {
     pub fn from_file(path: &str, batch_size: usize) -> Result<Self, Box<dyn std::error::Error>> {
         let file = std::fs::File::open(path)?;
         let builder = ParquetRecordBatchReaderBuilder::try_new(file)?;
+
+        let total_rows = builder.metadata().file_metadata().num_rows() as usize;
+
         let schema = builder.schema().clone();
 
         let header = schema
@@ -136,6 +140,7 @@ impl ParquetPreview {
             order: Vec::new(),
             current_batch: 0,
             sort_state: None,
+            total_rows,
         };
 
         preview.clear_sort();
