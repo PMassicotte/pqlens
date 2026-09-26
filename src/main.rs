@@ -41,19 +41,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     KeyCode::Char('G') => table_state.select_last(),
                     KeyCode::Char('?') => show_keymaps = !show_keymaps,
                     KeyCode::PageDown => {
-                        preview.next_batch()?;
+                        preview.next_view()?;
                         table_state.select_first();
                     }
                     KeyCode::PageUp => {
-                        preview.previous_batch()?;
+                        preview.previous_view()?;
                         table_state.select_first();
                     }
                     KeyCode::Home => {
-                        preview.first_batch()?;
+                        preview.first_view()?;
                         table_state.select_first();
                     }
                     KeyCode::End => {
-                        preview.last_batch()?;
+                        preview.last_view()?;
                         table_state.select_first();
                     }
                     KeyCode::Char('s') => {

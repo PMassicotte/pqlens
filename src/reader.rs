@@ -20,7 +20,7 @@ pub struct ParquetPreview {
     chunk_idx: Option<usize>,
     header: Vec<String>,
     rows: Vec<Vec<String>>,
-    batch: RecordBatch,
+    view: RecordBatch,
     order: Vec<usize>,
     current_batch: usize,
     sort_state: Option<SortState>,
@@ -62,31 +62,31 @@ impl ParquetPreview {
         }
     }
 
-    pub fn next_batch(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn next_view(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         if self.current_batch + 1 < self.num_batches() {
-            self.load_batch(self.current_batch + 1)?;
+            self.load_view(self.current_batch + 1)?;
         }
 
         Ok(())
     }
 
-    pub fn previous_batch(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn previous_view(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         if self.current_batch > 0 {
-            self.load_batch(self.current_batch - 1)?;
+            self.load_view(self.current_batch - 1)?;
         }
 
         Ok(())
     }
 
-    pub fn first_batch(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        self.load_batch(0)
+    pub fn first_view(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        self.load_view(0)
     }
 
-    pub fn last_batch(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        self.load_batch(self.num_batches().saturating_sub(1))
+    pub fn last_view(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        self.load_view(self.num_batches().saturating_sub(1))
     }
 
-    fn load_batch(&mut self, idx: usize) -> Result<(), Box<dyn std::error::Error>> {
+    fn load_view(&mut self, idx: usize) -> Result<(), Box<dyn std::error::Error>> {
         let chunk_idx = idx / BATCHES_PER_CHUNK;
         let chunk_rows = BATCHES_PER_CHUNK * self.batch_size;
 
@@ -103,9 +103,9 @@ impl ParquetPreview {
             .batch_size
             .min(self.chunk.num_rows().saturating_sub(offset));
 
-        self.batch = self.chunk.slice(offset, len);
+        self.view = self.chunk.slice(offset, len);
         self.current_batch = idx;
-        self.rows = format_rows(&self.batch)?;
+        self.rows = format_rows(&self.view)?;
         self.apply_sort()?;
 
         Ok(())
@@ -117,7 +117,7 @@ impl ParquetPreview {
             nulls_first: false,
         };
 
-        let idx = sort_to_indices(self.batch.column(col), Some(opts), None)?;
+        let idx = sort_to_indices(self.view.column(col), Some(opts), None)?;
 
         self.order = idx.values().iter().map(|&i| i as usize).collect();
 
@@ -197,13 +197,13 @@ impl ParquetPreview {
             chunk_idx: None,
             header,
             rows: Vec::new(),
-            batch: RecordBatch::new_empty(schema),
+            view: RecordBatch::new_empty(schema),
             order: Vec::new(),
             current_batch: 0,
             sort_state: None,
         };
 
-        preview.load_batch(0)?;
+        preview.load_view(0)?;
 
         Ok(preview)
     }
