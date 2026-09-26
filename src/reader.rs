@@ -9,11 +9,11 @@ use parquet::arrow::arrow_reader::{
 use parquet::file::metadata::PageIndexPolicy;
 use std::fs::File;
 
-const BATCHES_PER_CHUNK: usize = 100;
+const VIEWS_PER_CHUNK: usize = 100;
 
 pub struct ParquetPreview {
     path: String,
-    batch_size: usize,
+    rows_per_view: usize,
     metadata: ArrowReaderMetadata,
     row_group_starts: Vec<usize>,
     chunk: RecordBatch,
@@ -23,7 +23,7 @@ pub struct ParquetPreview {
     rows: Vec<Vec<String>>,
     view: RecordBatch,
     order: Vec<usize>,
-    current_batch: usize,
+    current_view: usize,
     sort_state: Option<SortState>,
 }
 
@@ -49,12 +49,12 @@ impl ParquetPreview {
         self.apply_sort()
     }
 
-    pub fn current_batch(&self) -> usize {
-        self.current_batch
+    pub fn current_view(&self) -> usize {
+        self.current_view
     }
 
-    pub fn num_batches(&self) -> usize {
-        self.total_rows().div_ceil(self.batch_size)
+    pub fn num_views(&self) -> usize {
+        self.total_rows().div_ceil(self.rows_per_view)
     }
 
     fn apply_sort(&mut self) -> Result<(), ArrowError> {
@@ -68,16 +68,16 @@ impl ParquetPreview {
     }
 
     pub fn next_view(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        if self.current_batch + 1 < self.num_batches() {
-            self.load_view(self.current_batch + 1)?;
+        if self.current_view + 1 < self.num_views() {
+            self.load_view(self.current_view + 1)?;
         }
 
         Ok(())
     }
 
     pub fn previous_view(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        if self.current_batch > 0 {
-            self.load_view(self.current_batch - 1)?;
+        if self.current_view > 0 {
+            self.load_view(self.current_view - 1)?;
         }
 
         Ok(())
@@ -88,12 +88,12 @@ impl ParquetPreview {
     }
 
     pub fn last_view(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        self.load_view(self.num_batches().saturating_sub(1))
+        self.load_view(self.num_views().saturating_sub(1))
     }
 
     fn load_view(&mut self, idx: usize) -> Result<(), Box<dyn std::error::Error>> {
-        let chunk_idx = idx / BATCHES_PER_CHUNK;
-        let chunk_rows = BATCHES_PER_CHUNK * self.batch_size;
+        let chunk_idx = idx / VIEWS_PER_CHUNK;
+        let chunk_rows = VIEWS_PER_CHUNK * self.rows_per_view;
 
         if self.chunk_idx != Some(chunk_idx) {
             let start = chunk_idx * chunk_rows;
@@ -102,14 +102,14 @@ impl ParquetPreview {
             self.chunk_idx = Some(chunk_idx);
         }
 
-        let offset = (idx % BATCHES_PER_CHUNK) * self.batch_size;
+        let offset = (idx % VIEWS_PER_CHUNK) * self.rows_per_view;
 
         let len = self
-            .batch_size
+            .rows_per_view
             .min(self.chunk.num_rows().saturating_sub(offset));
 
         self.view = self.chunk.slice(offset, len);
-        self.current_batch = idx;
+        self.current_view = idx;
         self.rows = format_rows(&self.view)?;
         self.apply_sort()?;
 
@@ -169,7 +169,7 @@ impl ParquetPreview {
         Ok(concat_batches(&schema, &batches)?)
     }
 
-    pub fn from_file(path: &str, batch_size: usize) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn from_file(path: &str, rows_per_view: usize) -> Result<Self, Box<dyn std::error::Error>> {
         let options = ArrowReaderOptions::new().with_page_index_policy(PageIndexPolicy::Optional);
         let metadata = ArrowReaderMetadata::load(&File::open(path)?, options)?;
         let schema = metadata.schema().clone();
@@ -202,7 +202,7 @@ impl ParquetPreview {
 
         let mut preview = ParquetPreview {
             path: path.to_string(),
-            batch_size,
+            rows_per_view,
             metadata,
             row_group_starts,
             chunk: RecordBatch::new_empty(schema.clone()),
@@ -212,7 +212,7 @@ impl ParquetPreview {
             rows: Vec::new(),
             view: RecordBatch::new_empty(schema),
             order: Vec::new(),
-            current_batch: 0,
+            current_view: 0,
             sort_state: None,
         };
 

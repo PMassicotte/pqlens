@@ -23,8 +23,8 @@ pub fn render(
         Line::from(
             format!(
                 " Batch {}/{}: {} rows in total",
-                preview.current_batch() + 1,
-                preview.num_batches(),
+                preview.current_view() + 1,
+                preview.num_views(),
                 preview.total_rows()
             )
             .bold()
