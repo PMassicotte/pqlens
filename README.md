@@ -1,12 +1,12 @@
 # pqlens
 
-Trying to make a simple TUI tool to inspect parquet files, similar to [csvlens](https://github.com/YS-L/csvlens) but for parquet files.
+Trying to make a simple TUI tool similar to [csvlens](https://github.com/YS-L/csvlens), but for parquet files.
 
 ## This project is not:
 
 - Vibe coded or using AI.
 - Blazingly fast with an ⚡ icon/badge showing off (no benchmarking, no performance claims on how many ms it takes to read a 1GB parquet file).
-- Trying to sell it as a good project just because it is written in Rust (language is not important, but I like rust).
+- Trying to sell it as a good project just because it is written in Rust (language is not that important).
 - Aiming to be a full-featured parquet file inspector (just a simple TUI tool).
 
 ## Installation
