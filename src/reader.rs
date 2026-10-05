@@ -58,12 +58,11 @@ impl ParquetPreview {
     }
 
     fn apply_sort(&mut self) -> Result<(), ArrowError> {
-        match self.sort_state {
-            Some(s) => self.sort_by(s.col(), s.dir() == SortDir::Desc),
-            None => {
-                self.clear_sort();
-                Ok(())
-            }
+        if let Some(s) = self.sort_state {
+            self.sort_by(s.col(), s.dir() == SortDir::Desc)
+        } else {
+            self.clear_sort();
+            Ok(())
         }
     }
 
@@ -92,9 +91,11 @@ impl ParquetPreview {
     }
 
     fn load_view(&mut self, idx: usize) -> Result<(), Box<dyn std::error::Error>> {
+        // Which chunk holds this view
         let chunk_idx = idx / VIEWS_PER_CHUNK;
         let chunk_rows = VIEWS_PER_CHUNK * self.rows_per_view;
 
+        // If the chunk is not in memory, read it from disk
         if self.chunk_idx != Some(chunk_idx) {
             let start = chunk_idx * chunk_rows;
             let len = chunk_rows.min(self.total_rows().saturating_sub(start));

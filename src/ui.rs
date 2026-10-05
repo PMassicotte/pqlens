@@ -81,7 +81,7 @@ fn render_table(
 
     let rows: Vec<Row> = preview
         .rows()
-        .map(|row| Row::new(row.iter().map(|r| r.as_str())))
+        .map(|row| Row::new(row.iter().map(std::string::String::as_str)))
         .collect();
 
     let widths: Vec<Constraint> = preview
