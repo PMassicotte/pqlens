@@ -28,6 +28,7 @@ pub struct ParquetPreview {
     rows: Vec<Vec<String>>,
     view: RecordBatch,
     sorted_idx: Option<UInt32Array>,
+    filtered_idx: Option<UInt32Array>,
     current_view: usize,
     sort_state: Option<SortState>,
 }
@@ -43,7 +44,7 @@ impl ParquetPreview {
 
     // Number of rows when a filter is applied, otherwise the same as total_rows
     pub fn visible_rows(&self) -> usize {
-        match &self.sorted_idx {
+        match &self.filtered_idx {
             Some(order) => order.len(),
             None => self.total_rows(),
         }
@@ -160,11 +161,11 @@ impl ParquetPreview {
     }
 
     fn load_view(&mut self, idx: usize) -> Result<(), Box<dyn std::error::Error>> {
-        self.view = match &self.sorted_idx {
+        let order = self.sorted_idx.as_ref().or(self.filtered_idx.as_ref());
+
+        self.view = match order {
             None => self.view_contiguous(idx)?,
             Some(order) => {
-                // NOTE: This will basically read the first 45 rows of the sorted order. I will
-                // eventually revisit that.
                 let start = idx * self.rows_per_view;
                 let end = (start + self.rows_per_view).min(order.len());
                 self.read_rows_at(&order.values()[start..end])?
@@ -187,6 +188,17 @@ impl ParquetPreview {
 
         let idx = sort_to_indices(&column, Some(opts), None)?;
 
+        // Only keep indices in the filter (if one is active)
+        let idx = if let Some(filter) = self.filtered_idx.as_ref() {
+            idx.values()
+                .iter()
+                .filter(|i| filter.values().binary_search(i).is_ok())
+                .copied()
+                .collect()
+        } else {
+            idx
+        };
+
         self.sorted_idx = Some(idx);
 
         Ok(())
@@ -198,7 +210,7 @@ impl ParquetPreview {
     }
 
     pub fn clear_filter(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        self.sorted_idx = None;
+        self.filtered_idx = None;
         self.apply_sort()?;
         self.load_view(0)
     }
@@ -260,7 +272,7 @@ impl ParquetPreview {
     fn apply_filter(&mut self, col: usize, value: &str) -> Result<(), Box<dyn std::error::Error>> {
         let column = self.read_column(col)?;
 
-        self.sorted_idx = Some(filter::matching_rows(&column, value)?);
+        self.filtered_idx = Some(filter::matching_rows(&column, value)?);
 
         Ok(())
     }
@@ -271,6 +283,7 @@ impl ParquetPreview {
         value: &str,
     ) -> Result<(), Box<dyn std::error::Error>> {
         self.apply_filter(col, value)?;
+        self.apply_sort()?;
         self.load_view(0)
     }
 
@@ -317,6 +330,7 @@ impl ParquetPreview {
             rows: Vec::new(),
             view: RecordBatch::new_empty(schema),
             sorted_idx: None,
+            filtered_idx: None,
             current_view: 0,
             sort_state: None,
         };
