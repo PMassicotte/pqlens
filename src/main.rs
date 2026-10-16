@@ -1,3 +1,4 @@
+mod filter;
 mod keymaps;
 mod reader;
 mod sorter;

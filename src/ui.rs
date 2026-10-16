@@ -1,5 +1,3 @@
-use std::fmt::format;
-
 use crate::keymaps::render_keymaps;
 use crate::reader::ParquetPreview;
 use crate::sorter::SortDir;
