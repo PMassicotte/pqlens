@@ -13,7 +13,7 @@ Trying to make a simple TUI tool similar to [csvlens](https://github.com/YS-L/cs
 
 ## Demo
 
-[![asciicast](https://asciinema.org/a/YXs2cXg2vueMNI9s.svg)](https://asciinema.org/a/YXs2cXg2vueMNI9s)
+[![pqlens demo](./assets/demo.gif)](https://asciinema.org/a/78y89FyTi2e92eGk)
 
 ## Installation
 
