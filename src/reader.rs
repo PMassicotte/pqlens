@@ -27,7 +27,7 @@ pub struct ParquetPreview {
     column_types: Vec<String>,
     rows: Vec<Vec<String>>,
     view: RecordBatch,
-    global_order: Option<UInt32Array>,
+    sorted_idx: Option<UInt32Array>,
     current_view: usize,
     sort_state: Option<SortState>,
 }
@@ -43,7 +43,7 @@ impl ParquetPreview {
 
     // Number of rows when a filter is applied, otherwise the same as total_rows
     pub fn visible_rows(&self) -> usize {
-        match &self.global_order {
+        match &self.sorted_idx {
             Some(order) => order.len(),
             None => self.total_rows(),
         }
@@ -160,7 +160,7 @@ impl ParquetPreview {
     }
 
     fn load_view(&mut self, idx: usize) -> Result<(), Box<dyn std::error::Error>> {
-        self.view = match &self.global_order {
+        self.view = match &self.sorted_idx {
             None => self.view_contiguous(idx)?,
             Some(order) => {
                 // NOTE: This will basically read the first 45 rows of the sorted order. I will
@@ -187,18 +187,18 @@ impl ParquetPreview {
 
         let idx = sort_to_indices(&column, Some(opts), None)?;
 
-        self.global_order = Some(idx);
+        self.sorted_idx = Some(idx);
 
         Ok(())
     }
 
     /// Clears any sorting and resets the order to the original row order.
     fn clear_sort(&mut self) {
-        self.global_order = None;
+        self.sorted_idx = None;
     }
 
     pub fn clear_filter(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        self.global_order = None;
+        self.sorted_idx = None;
         self.apply_sort()?;
         self.load_view(0)
     }
@@ -260,7 +260,7 @@ impl ParquetPreview {
     fn apply_filter(&mut self, col: usize, value: &str) -> Result<(), Box<dyn std::error::Error>> {
         let column = self.read_column(col)?;
 
-        self.global_order = Some(filter::matching_rows(&column, value)?);
+        self.sorted_idx = Some(filter::matching_rows(&column, value)?);
 
         Ok(())
     }
@@ -316,7 +316,7 @@ impl ParquetPreview {
             column_types,
             rows: Vec::new(),
             view: RecordBatch::new_empty(schema),
-            global_order: None,
+            sorted_idx: None,
             current_view: 0,
             sort_state: None,
         };
