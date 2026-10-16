@@ -27,40 +27,79 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut show_keymaps = false;
 
+    let mut show_user_input = false;
+    let mut user_input = String::new();
+
     ratatui::run(|terminal| {
         loop {
-            terminal.draw(|frame| render(frame, &mut table_state, &preview, show_keymaps))?;
+            terminal.draw(|frame| {
+                render(
+                    frame,
+                    &mut table_state,
+                    &preview,
+                    show_keymaps,
+                    show_user_input,
+                    &user_input,
+                );
+            })?;
             if let Some(key) = event::read()?.as_key_press_event() {
-                match key.code {
-                    KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
-                    KeyCode::Char('j') | KeyCode::Down => table_state.select_next(),
-                    KeyCode::Char('k') | KeyCode::Up => table_state.select_previous(),
-                    KeyCode::Char('l') | KeyCode::Right => table_state.select_next_column(),
-                    KeyCode::Char('h') | KeyCode::Left => table_state.select_previous_column(),
-                    KeyCode::Char('g') => table_state.select_first(),
-                    KeyCode::Char('G') => table_state.select_last(),
-                    KeyCode::Char('?') => show_keymaps = !show_keymaps,
-                    KeyCode::PageDown => {
-                        preview.next_view()?;
-                        table_state.select_first();
+                if show_user_input {
+                    match key.code {
+                        KeyCode::Char(c) => user_input.push(c),
+                        KeyCode::Backspace => {
+                            user_input.pop();
+                        }
+                        KeyCode::Esc => {
+                            user_input = String::new();
+                            show_user_input = false;
+                        }
+                        KeyCode::Enter => {
+                            if user_input.is_empty() {
+                                preview.clear_filter()?;
+                            } else {
+                                preview.set_filter(
+                                    table_state.selected_column().unwrap_or(0),
+                                    &user_input,
+                                )?;
+                            }
+
+                            show_user_input = false;
+                        }
+                        _ => {}
                     }
-                    KeyCode::PageUp => {
-                        preview.previous_view()?;
-                        table_state.select_first();
+                } else {
+                    match key.code {
+                        KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
+                        KeyCode::Char('j') | KeyCode::Down => table_state.select_next(),
+                        KeyCode::Char('k') | KeyCode::Up => table_state.select_previous(),
+                        KeyCode::Char('l') | KeyCode::Right => table_state.select_next_column(),
+                        KeyCode::Char('h') | KeyCode::Left => table_state.select_previous_column(),
+                        KeyCode::Char('g') => table_state.select_first(),
+                        KeyCode::Char('G') => table_state.select_last(),
+                        KeyCode::Char('?') => show_keymaps = !show_keymaps,
+                        KeyCode::PageDown => {
+                            preview.next_view()?;
+                            table_state.select_first();
+                        }
+                        KeyCode::PageUp => {
+                            preview.previous_view()?;
+                            table_state.select_first();
+                        }
+                        KeyCode::Home => {
+                            preview.first_view()?;
+                            table_state.select_first();
+                        }
+                        KeyCode::End => {
+                            preview.last_view()?;
+                            table_state.select_first();
+                        }
+                        KeyCode::Char('s') => {
+                            let col = table_state.selected_column().unwrap_or(0);
+                            preview.cycle_sort(col)?;
+                        }
+                        KeyCode::Char('/') => show_user_input = !show_user_input,
+                        _ => {}
                     }
-                    KeyCode::Home => {
-                        preview.first_view()?;
-                        table_state.select_first();
-                    }
-                    KeyCode::End => {
-                        preview.last_view()?;
-                        table_state.select_first();
-                    }
-                    KeyCode::Char('s') => {
-                        let col = table_state.selected_column().unwrap_or(0);
-                        preview.cycle_sort(col)?;
-                    }
-                    _ => {}
                 }
             }
         }

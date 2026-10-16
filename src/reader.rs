@@ -1,5 +1,8 @@
 use crate::sorter::{SortDir, SortState};
-use arrow::array::{ArrayRef, RecordBatch, RecordBatchReader, UInt32Array};
+use arrow::array::{
+    ArrayRef, BooleanArray, RecordBatch, RecordBatchReader, Scalar, StringArray, UInt32Array,
+};
+use arrow::compute::kernels::cmp::eq;
 use arrow::compute::{SortOptions, concat_batches, sort_to_indices};
 use arrow::error::ArrowError;
 use arrow::util::display::{ArrayFormatter, FormatOptions};
@@ -40,6 +43,14 @@ impl ParquetPreview {
         self.metadata.metadata().file_metadata().num_rows() as usize
     }
 
+    // Number of rows when a filter is applied, otherwise the same as total_rows
+    pub fn visible_rows(&self) -> usize {
+        match &self.global_order {
+            Some(order) => order.len(),
+            None => self.total_rows(),
+        }
+    }
+
     pub fn column_types(&self) -> &[String] {
         &self.column_types
     }
@@ -60,7 +71,7 @@ impl ParquetPreview {
     }
 
     pub fn num_views(&self) -> usize {
-        self.total_rows().div_ceil(self.rows_per_view)
+        self.visible_rows().div_ceil(self.rows_per_view)
     }
 
     fn apply_sort(&mut self) -> Result<(), Box<dyn std::error::Error>> {
@@ -188,6 +199,12 @@ impl ParquetPreview {
         self.global_order = None;
     }
 
+    pub fn clear_filter(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        self.global_order = None;
+        self.apply_sort()?;
+        self.load_view(0)
+    }
+
     /// Returns an iterator over the rows of the current view, already in display order.
     pub fn rows(&self) -> impl Iterator<Item = &Vec<String>> {
         self.rows.iter()
@@ -240,6 +257,45 @@ impl ParquetPreview {
         let column = concat_batches(&schema, &batches)?.column(0).clone();
 
         Ok(column)
+    }
+
+    fn filter_rows(
+        &self,
+        col: usize,
+        value: &str,
+    ) -> Result<UInt32Array, Box<dyn std::error::Error>> {
+        let column = self.read_column(col)?;
+
+        // Convert the user input (String) into the real column type
+        let needle = arrow::compute::cast(&StringArray::from(vec![value]), column.data_type())?;
+
+        // Need this because eq expect same size array, but here needle is only of length 1
+        let mask: BooleanArray = eq(&column, &Scalar::new(needle))?;
+
+        let indices = mask
+            .iter()
+            .enumerate()
+            .filter_map(|(i, keep)| (keep == Some(true)).then_some(i as u32))
+            .collect();
+
+        Ok(indices)
+    }
+
+    fn apply_filter(&mut self, col: usize, value: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let idx = self.filter_rows(col, value)?;
+
+        self.global_order = Some(idx);
+
+        Ok(())
+    }
+
+    pub fn set_filter(
+        &mut self,
+        col: usize,
+        value: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        self.apply_filter(col, value)?;
+        self.load_view(0)
     }
 
     pub fn from_file(path: &str, rows_per_view: usize) -> Result<Self, Box<dyn std::error::Error>> {

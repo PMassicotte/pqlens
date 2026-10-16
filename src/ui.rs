@@ -1,3 +1,5 @@
+use std::fmt::format;
+
 use crate::keymaps::render_keymaps;
 use crate::reader::ParquetPreview;
 use crate::sorter::SortDir;
@@ -5,7 +7,7 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Span, Text};
-use ratatui::widgets::{Cell, Row, Table, TableState};
+use ratatui::widgets::{Block, Cell, Clear, Paragraph, Row, Table, TableState};
 
 /// Render the UI with a table.
 pub fn render(
@@ -13,6 +15,8 @@ pub fn render(
     table_state: &mut TableState,
     preview: &ParquetPreview,
     show_keymaps: bool,
+    show_user_input: bool,
+    user_input: &str,
 ) {
     let layout = Layout::vertical([Constraint::Length(2), Constraint::Fill(1)]).spacing(1);
 
@@ -22,9 +26,10 @@ pub fn render(
         Line::from(" Press 'q' to quit, arrow keys to navigate, 's' to sort, '?' for keymaps"),
         Line::from(
             format!(
-                " Batch {}/{}: {} rows in total",
+                " Batch {}/{}: {} of {} rows in total",
                 preview.current_view() + 1,
                 preview.num_views(),
+                preview.visible_rows(),
                 preview.total_rows()
             )
             .bold()
@@ -39,6 +44,22 @@ pub fn render(
     if show_keymaps {
         render_keymaps(frame);
     }
+
+    if show_user_input {
+        let colname = preview.header()[table_state.selected_column().unwrap_or(0)].clone();
+        render_input_text(frame, &colname, user_input);
+    }
+}
+
+fn render_input_text(frame: &mut Frame, colname: &str, user_input: &str) {
+    let textbox = Paragraph::new(user_input).block(Block::bordered().title(format!(
+        "Enter something for column '{colname}' (Esc to cancel)",
+    )));
+
+    let zone = Rect::new(10, 10, 75, 5);
+
+    frame.render_widget(Clear, zone);
+    frame.render_widget(textbox, zone);
 }
 
 /// Render a table with some rows and columns.

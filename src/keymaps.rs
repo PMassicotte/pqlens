@@ -16,6 +16,7 @@ const KEYMAPS: &[(&str, &str)] = &[
     ("Home / End", "First / last batch"),
     ("s", "Sort by column"),
     ("?", "Toggle this help"),
+    ("/", "Filter by column"),
 ];
 
 pub fn render_keymaps(frame: &mut Frame) {
