@@ -18,3 +18,43 @@ pub fn matching_rows(column: &ArrayRef, value: &str) -> Result<UInt32Array, Arro
 
     Ok(indices)
 }
+
+#[cfg(test)]
+mod test {
+    use std::sync::Arc;
+
+    use arrow::array::{ArrayRef, Int32Array, StringArray};
+
+    #[test]
+    fn finds_single_match() {
+        let values = Arc::new(Int32Array::from(vec![1, 2, 3, 4, 5])) as ArrayRef;
+        let indices = super::matching_rows(&values, "3").unwrap();
+
+        assert_eq!(indices.len(), 1);
+        assert_eq!(indices.values(), &[2]);
+    }
+
+    #[test]
+    fn finds_two_match() {
+        let values = Arc::new(Int32Array::from(vec![1, 2, 3, 4, 1])) as ArrayRef;
+        let indices = super::matching_rows(&values, "1").unwrap();
+
+        assert_eq!(indices.values(), &[0, 4]);
+    }
+
+    #[test]
+    fn finds_nothing() {
+        let values = Arc::new(Int32Array::from(vec![1, 2, 3, 4, 1])) as ArrayRef;
+        let indices = super::matching_rows(&values, "10").unwrap();
+
+        assert!(indices.is_empty());
+    }
+
+    #[test]
+    fn finds_string_match() {
+        let values = Arc::new(StringArray::from(vec!["foo", "bar", "baz", "foo"])) as ArrayRef;
+        let indices = super::matching_rows(&values, "foo").unwrap();
+
+        assert_eq!(indices.values(), &[0, 3]);
+    }
+}
