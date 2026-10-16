@@ -11,6 +11,10 @@ Trying to make a simple TUI tool similar to [csvlens](https://github.com/YS-L/cs
 - Trying to sell it as a good project just because it is written in Rust (language is not that important).
 - Aiming to be a full-featured parquet file inspector (just a simple TUI tool).
 
+## Demo
+
+[![asciicast](https://asciinema.org/a/YXs2cXg2vueMNI9s.svg)](https://asciinema.org/a/YXs2cXg2vueMNI9s)
+
 ## Installation
 
 ### From GitHub
