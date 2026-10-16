@@ -1,5 +1,7 @@
 # pqlens
 
+[![Rust](https://github.com/PMassicotte/pqlens/actions/workflows/rust.yml/badge.svg)](https://github.com/PMassicotte/pqlens/actions/workflows/rust.yml)
+
 Trying to make a simple TUI tool similar to [csvlens](https://github.com/YS-L/csvlens), but for parquet files.
 
 ## This project is not:
