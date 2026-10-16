@@ -50,19 +50,23 @@ pub fn render(
 }
 
 fn render_input_text(frame: &mut Frame, colname: &str, user_input: &str) {
-    let textbox = Paragraph::new(user_input).block(Block::bordered().title(format!(
-        "Enter search term for column '{colname}' (Esc to cancel)",
-    )));
+    let textbox = Paragraph::new(user_input)
+        .block(Block::bordered().title(format!("Search term for '{colname}' (Esc to cancel)")));
 
     let [_, bottom] =
         Layout::vertical([Constraint::Fill(1), Constraint::Length(3)]).areas(frame.area());
 
+    let bottom_right = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .split(bottom)[1];
+
     frame.set_cursor_position(Position {
-        x: bottom.x + 1 + user_input.len() as u16,
-        y: bottom.y + 1,
+        x: (bottom_right.x + 1 + user_input.chars().count() as u16)
+            .min(bottom_right.x + bottom_right.width - 1),
+        y: bottom_right.y + 1,
     });
-    frame.render_widget(Clear, bottom);
-    frame.render_widget(textbox, bottom);
+
+    frame.render_widget(Clear, bottom_right);
+    frame.render_widget(textbox, bottom_right);
 }
 
 /// Render a table with some rows and columns.
