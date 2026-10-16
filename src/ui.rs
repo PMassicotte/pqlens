@@ -2,7 +2,7 @@ use crate::keymaps::render_keymaps;
 use crate::reader::ParquetPreview;
 use crate::sorter::SortDir;
 use ratatui::Frame;
-use ratatui::layout::{Constraint, Layout, Rect};
+use ratatui::layout::{Constraint, Layout, Position, Rect};
 use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, Cell, Clear, Paragraph, Row, Table, TableState};
@@ -51,13 +51,18 @@ pub fn render(
 
 fn render_input_text(frame: &mut Frame, colname: &str, user_input: &str) {
     let textbox = Paragraph::new(user_input).block(Block::bordered().title(format!(
-        "Enter something for column '{colname}' (Esc to cancel)",
+        "Enter search term for column '{colname}' (Esc to cancel)",
     )));
 
-    let zone = Rect::new(10, 10, 75, 5);
+    let [_, bottom] =
+        Layout::vertical([Constraint::Fill(1), Constraint::Length(3)]).areas(frame.area());
 
-    frame.render_widget(Clear, zone);
-    frame.render_widget(textbox, zone);
+    frame.set_cursor_position(Position {
+        x: bottom.x + 1 + user_input.len() as u16,
+        y: bottom.y + 1,
+    });
+    frame.render_widget(Clear, bottom);
+    frame.render_widget(textbox, bottom);
 }
 
 /// Render a table with some rows and columns.
