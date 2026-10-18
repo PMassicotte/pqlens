@@ -77,6 +77,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         KeyCode::Char('h') | KeyCode::Left => table_state.select_previous_column(),
                         KeyCode::Char('g') => table_state.select_first(),
                         KeyCode::Char('G') => table_state.select_last(),
+                        KeyCode::Char('f') => {
+                            if preview.is_filtered() {
+                                preview.clear_filter()?;
+                            } else {
+                                let Some((row, col)) = table_state.selected_cell() else {
+                                    continue;
+                                };
+
+                                preview.filter_by_cell(row, col)?;
+                            }
+                        }
                         KeyCode::Char('?') => show_keymaps = !show_keymaps,
                         KeyCode::PageDown => {
                             preview.next_view()?;

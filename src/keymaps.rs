@@ -11,6 +11,7 @@ const KEYMAPS: &[(&str, &str)] = &[
     ("q / Esc", "Quit"),
     ("j/k, ↓/↑", "Move row"),
     ("h/l, ←/→", "Move column"),
+    ("f", "Toggle filter with selected value"),
     ("g / G", "First / last row"),
     ("PgUp / PgDn", "Previous / next batch"),
     ("Home / End", "First / last batch"),

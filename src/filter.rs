@@ -2,13 +2,8 @@ use arrow::array::{ArrayRef, BooleanArray, Scalar, StringArray, UInt32Array};
 use arrow::compute::kernels::cmp::eq;
 use arrow::error::ArrowError;
 
-/// Returns the indices of the rows in `column` that match the given `value`.
-pub fn matching_rows(column: &ArrayRef, value: &str) -> Result<UInt32Array, ArrowError> {
-    // Convert the user input (String) into the real column type
-    let needle = arrow::compute::cast(&StringArray::from(vec![value]), column.data_type())?;
-
-    // Need this because eq expect same size array, but here needle is only of length 1
-    let mask: BooleanArray = eq(column, &Scalar::new(needle))?;
+pub fn matching_rows_for(column: &ArrayRef, needle: &ArrayRef) -> Result<UInt32Array, ArrowError> {
+    let mask: BooleanArray = eq(column, &Scalar::new(needle.clone()))?;
 
     let indices = mask
         .iter()
@@ -17,6 +12,13 @@ pub fn matching_rows(column: &ArrayRef, value: &str) -> Result<UInt32Array, Arro
         .collect();
 
     Ok(indices)
+}
+
+/// Returns the indices of the rows in `column` that match the given `value`.
+pub fn matching_rows(column: &ArrayRef, value: &str) -> Result<UInt32Array, ArrowError> {
+    // Cast the received text into the column type for which we are searching for
+    let needle = arrow::compute::cast(&StringArray::from(vec![value]), column.data_type())?;
+    matching_rows_for(column, &needle)
 }
 
 #[cfg(test)]
@@ -56,5 +58,16 @@ mod test {
         let indices = super::matching_rows(&values, "foo").unwrap();
 
         assert_eq!(indices.values(), &[0, 3]);
+    }
+
+    #[test]
+    fn finds_single_match_native_type() {
+        let values = Arc::new(Int32Array::from(vec![1, 2, 3, 4, 5])) as ArrayRef;
+
+        let needle = Arc::new(Int32Array::from(vec![5])) as ArrayRef;
+        let indices = super::matching_rows_for(&values, &needle).unwrap();
+
+        assert_eq!(indices.len(), 1);
+        assert_eq!(indices.values(), &[4]);
     }
 }

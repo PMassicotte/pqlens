@@ -50,6 +50,10 @@ impl ParquetPreview {
         }
     }
 
+    pub fn is_filtered(&self) -> bool {
+        self.filtered_idx.is_some()
+    }
+
     pub fn column_types(&self) -> &[String] {
         &self.column_types
     }
@@ -125,6 +129,25 @@ impl ParquetPreview {
             .min(self.chunk.num_rows().saturating_sub(offset));
 
         Ok(self.chunk.slice(offset, len))
+    }
+
+    pub fn filter_by_cell(
+        &mut self,
+        row: usize,
+        col: usize,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let selected_value = self.view.column(col).slice(row, 1);
+        let col = self.read_column(col)?;
+
+        // filter::matching_rows(&col, value)?;
+
+        let idx = filter::matching_rows_for(&col, &selected_value)?;
+
+        self.filtered_idx = Some(idx);
+
+        self.apply_sort()?;
+
+        self.load_view(0)
     }
 
     fn read_rows_at(&self, indices: &[u32]) -> Result<RecordBatch, Box<dyn std::error::Error>> {
