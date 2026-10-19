@@ -11,13 +11,14 @@ const KEYMAPS: &[(&str, &str)] = &[
     ("q / Esc", "Quit"),
     ("j/k, ↓/↑", "Move row"),
     ("h/l, ←/→", "Move column"),
-    ("f", "Toggle filter with selected value"),
     ("g / G", "First / last row"),
     ("PgUp / PgDn", "Previous / next batch"),
     ("Home / End", "First / last batch"),
     ("s", "Sort by column"),
     ("?", "Toggle this help"),
+    ("f", "Toggle filter with selected value"),
     ("/", "Filter by column"),
+    ("c", "Clear filter"),
 ];
 
 pub fn render_keymaps(frame: &mut Frame) {
@@ -32,6 +33,7 @@ pub fn render_keymaps(frame: &mut Frame) {
         Constraint::Length(50),
         Constraint::Length(KEYMAPS.len() as u16 + 2), // +2 for borders
     );
+
     frame.render_widget(Clear, area);
     frame.render_widget(table, area);
 }

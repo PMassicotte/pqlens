@@ -21,7 +21,9 @@ pub fn render(
     let [top, main] = frame.area().layout(&layout);
 
     let title = Text::from(vec![
-        Line::from(" Press 'q' to quit, arrow keys to navigate, 's' to sort, '?' for keymaps"),
+        Line::from(
+            " Press 'q' or 'Esc' to quit, arrow keys to navigate, 's' to sort, '?' for keymaps",
+        ),
         Line::from(
             format!(
                 " Batch {}/{}: {} of {} rows in total",

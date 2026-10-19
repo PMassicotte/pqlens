@@ -228,7 +228,7 @@ impl ParquetPreview {
     }
 
     /// Clears any sorting and resets the order to the original row order.
-    fn clear_sort(&mut self) {
+    pub fn clear_sort(&mut self) {
         self.sorted_idx = None;
     }
 

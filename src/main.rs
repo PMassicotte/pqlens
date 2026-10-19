@@ -70,7 +70,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 } else {
                     match key.code {
-                        KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
+                        KeyCode::Char('c') => {
+                            preview.clear_filter()?;
+                            preview.clear_sort();
+                        }
                         KeyCode::Char('j') | KeyCode::Down => table_state.select_next(),
                         KeyCode::Char('k') | KeyCode::Up => table_state.select_previous(),
                         KeyCode::Char('l') | KeyCode::Right => table_state.select_next_column(),
