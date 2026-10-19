@@ -74,6 +74,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             preview.clear_filter()?;
                             preview.clear_sort();
                         }
+                        KeyCode::Char('q') | KeyCode::Esc => {
+                            if show_keymaps {
+                                show_keymaps = false;
+                            } else {
+                                return Ok(());
+                            }
+                        }
                         KeyCode::Char('j') | KeyCode::Down => table_state.select_next(),
                         KeyCode::Char('k') | KeyCode::Up => table_state.select_previous(),
                         KeyCode::Char('l') | KeyCode::Right => table_state.select_next_column(),
