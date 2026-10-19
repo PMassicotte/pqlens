@@ -1,9 +1,38 @@
 use arrow::array::{ArrayRef, BooleanArray, Scalar, StringArray, UInt32Array};
 use arrow::compute::kernels::cmp::eq;
+use arrow::compute::kernels::comparison::ilike;
+use arrow::datatypes::DataType;
 use arrow::error::ArrowError;
 
+fn is_string_type(data_type: &DataType) -> bool {
+    matches!(
+        data_type,
+        DataType::Utf8 | DataType::LargeUtf8 | DataType::Utf8View
+    )
+}
+
+fn escape_like(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+
+    for c in s.chars() {
+        if matches!(c, '\\' | '%' | '_') {
+            out.push('\\');
+        }
+
+        out.push(c);
+    }
+
+    out
+}
+
 pub fn matching_rows_for(column: &ArrayRef, needle: &ArrayRef) -> Result<UInt32Array, ArrowError> {
-    let mask: BooleanArray = eq(column, &Scalar::new(needle.clone()))?;
+    let needle = Scalar::new(needle.clone());
+
+    let mask: BooleanArray = if is_string_type(column.data_type()) {
+        ilike(column, &needle)?
+    } else {
+        eq(column, &needle)?
+    };
 
     let indices = mask
         .iter()
@@ -16,8 +45,14 @@ pub fn matching_rows_for(column: &ArrayRef, needle: &ArrayRef) -> Result<UInt32A
 
 /// Returns the indices of the rows in `column` that match the given `value`.
 pub fn matching_rows(column: &ArrayRef, value: &str) -> Result<UInt32Array, ArrowError> {
+    let text = if is_string_type(column.data_type()) {
+        format!("%{}%", escape_like(value))
+    } else {
+        value.to_string()
+    };
+
     // Cast the received text into the column type for which we are searching for
-    let needle = arrow::compute::cast(&StringArray::from(vec![value]), column.data_type())?;
+    let needle = arrow::compute::cast(&StringArray::from(vec![text]), column.data_type())?;
     matching_rows_for(column, &needle)
 }
 
