@@ -62,6 +62,8 @@ mod test {
 
     use arrow::array::{ArrayRef, Int32Array, StringArray};
 
+    use crate::filter::escape_like;
+
     #[test]
     fn finds_single_match() {
         let values = Arc::new(Int32Array::from(vec![1, 2, 3, 4, 5])) as ArrayRef;
@@ -104,5 +106,37 @@ mod test {
 
         assert_eq!(indices.len(), 1);
         assert_eq!(indices.values(), &[4]);
+    }
+
+    #[test]
+    fn partial_search_on_string() {
+        let values = Arc::new(StringArray::from(vec!["foo", "bar", "baz", "foo"])) as ArrayRef;
+
+        let indices = super::matching_rows(&values, "fo").unwrap();
+        assert_eq!(indices.values(), &[0, 3]);
+
+        let indices = super::matching_rows(&values, "ba").unwrap();
+        assert_eq!(indices.values(), &[1, 2]);
+    }
+
+    #[test]
+    fn partial_search_escaping() {
+        let values = Arc::new(StringArray::from(vec!["foo", "bar", "baz", "%foo"])) as ArrayRef;
+
+        // Search for `%fo` literally
+        let indices = super::matching_rows(&values, "%fo").unwrap();
+        assert_eq!(indices.values(), &[3]);
+    }
+
+    #[test]
+    fn escape_like_works() {
+        let search_text = "%foo";
+        assert_eq!(super::escape_like(search_text), "\\%foo");
+
+        let search_text = "_foo";
+        assert_eq!(super::escape_like(search_text), "\\_foo");
+
+        let search_text = "\\foo";
+        assert_eq!(super::escape_like(search_text), "\\\\foo");
     }
 }
