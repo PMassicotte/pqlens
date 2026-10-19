@@ -2,6 +2,7 @@
 name = "pqlens"
 version = "0.1.0"
 edition = "2024"
+repository = "https://github.com/PMassicotte/pqlens/"
 
 [dependencies]
 arrow = { version = "60.0.0" }
