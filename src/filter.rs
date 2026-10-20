@@ -62,8 +62,6 @@ mod test {
 
     use arrow::array::{ArrayRef, Int32Array, StringArray};
 
-    use crate::filter::escape_like;
-
     #[test]
     fn finds_single_match() {
         let values = Arc::new(Int32Array::from(vec![1, 2, 3, 4, 5])) as ArrayRef;
