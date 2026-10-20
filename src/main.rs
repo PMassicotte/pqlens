@@ -13,10 +13,9 @@ use ratatui::widgets::TableState;
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let parquet_file_path = match std::env::args().nth(1) {
-        Some(path) => path,
-        None => "./data/sample-users.parquet".to_string(),
-    };
+    let parquet_file_path = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "./data/sample-users.parquet".to_string());
 
     let mut preview = ParquetPreview::from_file(&parquet_file_path, 45)?;
 
