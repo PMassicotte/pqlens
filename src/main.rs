@@ -5,19 +5,10 @@ mod reader;
 mod sorter;
 mod ui;
 
+use crate::app::App;
 use crate::ui::render;
-use reader::ParquetPreview;
 
 use crossterm::event;
-use ratatui::widgets::TableState;
-
-struct App {
-    preview: ParquetPreview,
-    table_state: TableState,
-    show_keymaps: bool,
-    show_user_input: bool,
-    user_input: String,
-}
 
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
@@ -31,14 +22,7 @@ fn main() -> color_eyre::Result<()> {
     ratatui::run(|terminal| {
         loop {
             terminal.draw(|frame| {
-                render(
-                    frame,
-                    &mut app.table_state,
-                    &app.preview,
-                    app.show_keymaps,
-                    app.show_user_input,
-                    &app.user_input,
-                );
+                render(frame, &mut app);
             })?;
 
             if let Some(key) = event::read()?.as_key_press_event()

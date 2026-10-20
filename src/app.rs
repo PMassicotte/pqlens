@@ -1,7 +1,14 @@
-use crate::App;
-use crate::ParquetPreview;
+use crate::reader::ParquetPreview;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::widgets::TableState;
+
+pub struct App {
+    pub preview: ParquetPreview,
+    pub table_state: TableState,
+    pub show_keymaps: bool,
+    pub show_user_input: bool,
+    pub user_input: String,
+}
 
 impl App {
     pub fn new(path: &str) -> color_eyre::Result<App> {

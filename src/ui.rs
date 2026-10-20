@@ -1,3 +1,4 @@
+use crate::app::App;
 use crate::keymaps::render_keymaps;
 use crate::reader::ParquetPreview;
 use crate::sorter::SortDir;
@@ -8,14 +9,7 @@ use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, Cell, Clear, Paragraph, Row, Table, TableState};
 
 /// Render the UI with a table.
-pub fn render(
-    frame: &mut Frame,
-    table_state: &mut TableState,
-    preview: &ParquetPreview,
-    show_keymaps: bool,
-    show_user_input: bool,
-    user_input: &str,
-) {
+pub fn render(frame: &mut Frame, app: &mut App) {
     let layout = Layout::vertical([Constraint::Length(2), Constraint::Fill(1)]).spacing(1);
 
     let [top, main] = frame.area().layout(&layout);
@@ -27,10 +21,10 @@ pub fn render(
         Line::from(
             format!(
                 " Batch {}/{}: {} of {} rows in total",
-                preview.current_view() + 1,
-                preview.num_views(),
-                preview.visible_rows(),
-                preview.total_rows()
+                app.preview.current_view() + 1,
+                app.preview.num_views(),
+                app.preview.visible_rows(),
+                app.preview.total_rows()
             )
             .bold()
             .fg(Color::Green),
@@ -39,15 +33,15 @@ pub fn render(
 
     frame.render_widget(title.centered(), top);
 
-    render_table(frame, main, table_state, preview);
+    render_table(frame, main, &mut app.table_state, &app.preview);
 
-    if show_keymaps {
+    if app.show_keymaps {
         render_keymaps(frame);
     }
 
-    if show_user_input {
-        let colname = preview.header()[table_state.selected_column().unwrap_or(0)].clone();
-        render_input_text(frame, &colname, user_input);
+    if app.show_user_input {
+        let colname = app.preview.header()[app.table_state.selected_column().unwrap_or(0)].clone();
+        render_input_text(frame, &colname, &app.user_input);
     }
 }
 
