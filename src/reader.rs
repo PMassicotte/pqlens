@@ -131,11 +131,7 @@ impl ParquetPreview {
         Ok(self.chunk.slice(offset, len))
     }
 
-    pub fn filter_by_cell(
-        &mut self,
-        row: usize,
-        col: usize,
-    ) -> Result<(), color_eyre::Report> {
+    pub fn filter_by_cell(&mut self, row: usize, col: usize) -> Result<(), color_eyre::Report> {
         let selected_value = self.view.column(col).slice(row, 1);
         let col = self.read_column(col)?;
 
@@ -244,11 +240,7 @@ impl ParquetPreview {
     }
 
     /// Reads `len` rows starting at row `start`, decoding only the row groups that contain them.
-    fn read_rows(
-        &self,
-        start: usize,
-        len: usize,
-    ) -> Result<RecordBatch, color_eyre::Report> {
+    fn read_rows(&self, start: usize, len: usize) -> Result<RecordBatch, color_eyre::Report> {
         let schema = self.metadata.schema().clone();
 
         if len == 0 {
@@ -300,11 +292,7 @@ impl ParquetPreview {
         Ok(())
     }
 
-    pub fn set_filter(
-        &mut self,
-        col: usize,
-        value: &str,
-    ) -> Result<(), color_eyre::Report> {
+    pub fn set_filter(&mut self, col: usize, value: &str) -> Result<(), color_eyre::Report> {
         self.apply_filter(col, value)?;
         self.apply_sort()?;
         self.load_view(0)

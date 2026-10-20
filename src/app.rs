@@ -26,6 +26,15 @@ impl App {
         Ok(app)
     }
 
+    pub fn handle_key(&mut self, key: KeyEvent) -> color_eyre::Result<bool> {
+        if self.show_user_input {
+            self.handle_search_key(key.code)?;
+            return Ok(false);
+        }
+
+        self.handle_normal_key(key.code)
+    }
+
     fn handle_normal_key(&mut self, code: KeyCode) -> color_eyre::Result<bool> {
         match code {
             KeyCode::Char('c') => {
@@ -110,14 +119,5 @@ impl App {
         }
 
         Ok(())
-    }
-
-    pub fn handle_key(&mut self, key: KeyEvent) -> color_eyre::Result<bool> {
-        if self.show_user_input {
-            self.handle_search_key(key.code)?;
-            return Ok(false);
-        }
-
-        self.handle_normal_key(key.code)
     }
 }
