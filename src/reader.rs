@@ -62,7 +62,7 @@ impl ParquetPreview {
         self.sort_state
     }
 
-    pub fn cycle_sort(&mut self, col: usize) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn cycle_sort(&mut self, col: usize) -> Result<(), color_eyre::Report> {
         self.sort_state = SortState::next(self.sort_state, col);
         self.apply_sort()?;
 
@@ -77,7 +77,7 @@ impl ParquetPreview {
         self.visible_rows().div_ceil(self.rows_per_view)
     }
 
-    fn apply_sort(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    fn apply_sort(&mut self) -> Result<(), color_eyre::Report> {
         if let Some(s) = self.sort_state {
             self.sort_by(s.col(), s.dir() == SortDir::Desc)
         } else {
@@ -86,7 +86,7 @@ impl ParquetPreview {
         }
     }
 
-    pub fn next_view(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn next_view(&mut self) -> Result<(), color_eyre::Report> {
         if self.current_view + 1 < self.num_views() {
             self.load_view(self.current_view + 1)?;
         }
@@ -94,7 +94,7 @@ impl ParquetPreview {
         Ok(())
     }
 
-    pub fn previous_view(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn previous_view(&mut self) -> Result<(), color_eyre::Report> {
         if self.current_view > 0 {
             self.load_view(self.current_view - 1)?;
         }
@@ -102,17 +102,17 @@ impl ParquetPreview {
         Ok(())
     }
 
-    pub fn first_view(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn first_view(&mut self) -> Result<(), color_eyre::Report> {
         self.load_view(0)
     }
 
-    pub fn last_view(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn last_view(&mut self) -> Result<(), color_eyre::Report> {
         self.load_view(self.num_views().saturating_sub(1))
     }
 
     // Only called when there is no global order, so we can read a contiguous chunk of rows from the
     // parquet file.
-    fn view_contiguous(&mut self, idx: usize) -> Result<RecordBatch, Box<dyn std::error::Error>> {
+    fn view_contiguous(&mut self, idx: usize) -> Result<RecordBatch, color_eyre::Report> {
         let chunk_idx = idx / VIEWS_PER_CHUNK;
         let chunk_rows = VIEWS_PER_CHUNK * self.rows_per_view;
 
@@ -135,7 +135,7 @@ impl ParquetPreview {
         &mut self,
         row: usize,
         col: usize,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), color_eyre::Report> {
         let selected_value = self.view.column(col).slice(row, 1);
         let col = self.read_column(col)?;
 
@@ -150,7 +150,7 @@ impl ParquetPreview {
         self.load_view(0)
     }
 
-    fn read_rows_at(&self, indices: &[u32]) -> Result<RecordBatch, Box<dyn std::error::Error>> {
+    fn read_rows_at(&self, indices: &[u32]) -> Result<RecordBatch, color_eyre::Report> {
         let schema = self.metadata.schema().clone();
 
         if indices.is_empty() {
@@ -183,7 +183,7 @@ impl ParquetPreview {
         Ok(take_record_batch(&batch, &positions)?)
     }
 
-    fn load_view(&mut self, idx: usize) -> Result<(), Box<dyn std::error::Error>> {
+    fn load_view(&mut self, idx: usize) -> Result<(), color_eyre::Report> {
         let order = self.sorted_idx.as_ref().or(self.filtered_idx.as_ref());
 
         self.view = match order {
@@ -201,7 +201,7 @@ impl ParquetPreview {
         Ok(())
     }
 
-    fn sort_by(&mut self, col: usize, descending: bool) -> Result<(), Box<dyn std::error::Error>> {
+    fn sort_by(&mut self, col: usize, descending: bool) -> Result<(), color_eyre::Report> {
         let column = self.read_column(col)?;
 
         let opts = SortOptions {
@@ -232,7 +232,7 @@ impl ParquetPreview {
         self.sorted_idx = None;
     }
 
-    pub fn clear_filter(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn clear_filter(&mut self) -> Result<(), color_eyre::Report> {
         self.filtered_idx = None;
         self.apply_sort()?;
         self.load_view(0)
@@ -248,7 +248,7 @@ impl ParquetPreview {
         &self,
         start: usize,
         len: usize,
-    ) -> Result<RecordBatch, Box<dyn std::error::Error>> {
+    ) -> Result<RecordBatch, color_eyre::Report> {
         let schema = self.metadata.schema().clone();
 
         if len == 0 {
@@ -274,7 +274,7 @@ impl ParquetPreview {
     }
 
     // Read just 1 column from the parquet file, it will be used to sort the whole file
-    pub fn read_column(&self, col: usize) -> Result<ArrayRef, Box<dyn std::error::Error>> {
+    pub fn read_column(&self, col: usize) -> Result<ArrayRef, color_eyre::Report> {
         let projection_mask = ProjectionMask::roots(self.metadata.parquet_schema(), [col]);
 
         let reader = ParquetRecordBatchReaderBuilder::new_with_metadata(
@@ -292,7 +292,7 @@ impl ParquetPreview {
         Ok(column)
     }
 
-    fn apply_filter(&mut self, col: usize, value: &str) -> Result<(), Box<dyn std::error::Error>> {
+    fn apply_filter(&mut self, col: usize, value: &str) -> Result<(), color_eyre::Report> {
         let column = self.read_column(col)?;
 
         self.filtered_idx = Some(filter::matching_rows(&column, value)?);
@@ -304,13 +304,13 @@ impl ParquetPreview {
         &mut self,
         col: usize,
         value: &str,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), color_eyre::Report> {
         self.apply_filter(col, value)?;
         self.apply_sort()?;
         self.load_view(0)
     }
 
-    pub fn from_file(path: &str, rows_per_view: usize) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn from_file(path: &str, rows_per_view: usize) -> Result<Self, color_eyre::Report> {
         let options = ArrowReaderOptions::new().with_page_index_policy(PageIndexPolicy::Optional);
         let metadata = ArrowReaderMetadata::load(&File::open(path)?, options)?;
         let schema = metadata.schema().clone();

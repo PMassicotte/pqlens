@@ -7,19 +7,18 @@ mod ui;
 use crate::ui::render;
 use reader::ParquetPreview;
 
-use color_eyre::Result;
 use crossterm::event::{self, KeyCode};
 use ratatui::widgets::TableState;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> color_eyre::Result<()> {
+    color_eyre::install()?;
+
     let parquet_file_path = match std::env::args().nth(1) {
         Some(path) => path,
         None => "./data/sample-users.parquet".to_string(),
     };
 
     let mut preview = ParquetPreview::from_file(&parquet_file_path, 45)?;
-
-    color_eyre::install()?;
 
     let mut table_state = TableState::default();
 
