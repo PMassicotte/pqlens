@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use crate::reader::ParquetPreview;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::widgets::TableState;
@@ -11,7 +13,7 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(path: &str) -> color_eyre::Result<App> {
+    pub fn new(path: &Path) -> color_eyre::Result<App> {
         let mut app = App {
             preview: ParquetPreview::from_file(path, 45)?,
             table_state: TableState::default(),

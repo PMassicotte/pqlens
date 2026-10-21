@@ -5,19 +5,36 @@ mod reader;
 mod sorter;
 mod ui;
 
+use std::path::PathBuf;
+
 use crate::app::App;
 use crate::ui::render;
 
+use clap::Parser;
 use crossterm::event;
+
+#[derive(Parser)]
+#[command( version, long_about = None)]
+struct Cli {
+    #[arg(default_value = "./data/sample-users.parquet")]
+    filename: PathBuf,
+
+    /// Show schema only
+    #[arg(short, long)]
+    schema: bool,
+}
 
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let parquet_file_path = std::env::args()
-        .nth(1)
-        .unwrap_or_else(|| "./data/sample-users.parquet".to_string());
+    let cli = Cli::parse();
 
-    let mut app = App::new(&parquet_file_path)?;
+    let mut app = App::new(&cli.filename)?;
+
+    if cli.schema {
+        println!("{}", app.preview.schema());
+        return Ok(());
+    }
 
     ratatui::run(|terminal| {
         loop {
