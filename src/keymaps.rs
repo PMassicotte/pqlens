@@ -17,7 +17,7 @@ const KEYMAPS: &[(&str, &str)] = &[
     ("s", "Sort by column"),
     ("?", "Toggle this help"),
     ("f", "Toggle filter with selected value"),
-    ("u", "Filter by unique values"),
+    ("d", "Filter by unique values"),
     ("/", "Filter by column"),
     ("c", "Clear filter"),
 ];
