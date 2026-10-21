@@ -88,6 +88,10 @@ impl App {
                 let col = self.table_state.selected_column().unwrap_or(0);
                 self.preview.cycle_sort(col)?;
             }
+            KeyCode::Char('u') => {
+                let col = self.table_state.selected_column().unwrap_or(0);
+                self.preview.filter_distinct(col)?;
+            }
             KeyCode::Char('/') => self.show_user_input = !self.show_user_input,
             _ => {}
         }

@@ -2,6 +2,7 @@ use crate::filter;
 use crate::sorter::{SortDir, SortState};
 use arrow::array::{ArrayRef, RecordBatch, RecordBatchReader, UInt32Array};
 use arrow::compute::{SortOptions, concat_batches, sort_to_indices};
+use arrow::compute::{partition, take};
 use arrow::error::ArrowError;
 use arrow::util::display::{ArrayFormatter, FormatOptions};
 use parquet::arrow::ProjectionMask;
@@ -188,6 +189,28 @@ impl ParquetPreview {
             .collect();
 
         Ok(take_record_batch(&batch, &positions)?)
+    }
+
+    /// Filter to keep the distinct values on the selected column
+    pub fn filter_distinct(&mut self, col: usize) -> Result<(), color_eyre::Report> {
+        let column = self.read_column(col)?;
+
+        let order = sort_to_indices(&column, None, None)?;
+        let sorted = take(&column, &order, None)?;
+        let partitions = partition(&[sorted])?;
+
+        let mut rows: Vec<u32> = partitions
+            .ranges()
+            .iter()
+            .map(|r| order.value(r.start))
+            .collect();
+
+        rows.sort_unstable();
+
+        self.filtered_idx = Some(rows.into());
+        self.apply_sort()?;
+
+        self.load_view(0)
     }
 
     fn load_view(&mut self, idx: usize) -> Result<(), color_eyre::Report> {
