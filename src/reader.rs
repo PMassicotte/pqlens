@@ -10,6 +10,7 @@ use parquet::arrow::arrow_reader::{
 };
 use parquet::file::metadata::PageIndexPolicy;
 use std::fs::File;
+use std::path::{Path, PathBuf};
 
 use arrow::compute::take_record_batch;
 use parquet::arrow::arrow_reader::RowSelection;
@@ -17,7 +18,7 @@ use parquet::arrow::arrow_reader::RowSelection;
 const VIEWS_PER_CHUNK: usize = 100;
 
 pub struct ParquetPreview {
-    path: String,
+    path: PathBuf,
     rows_per_view: usize,
     metadata: ArrowReaderMetadata,
     row_group_starts: Vec<usize>,
@@ -36,6 +37,16 @@ pub struct ParquetPreview {
 impl ParquetPreview {
     pub fn header(&self) -> &[String] {
         &self.header
+    }
+
+    pub fn schema(&self) -> String {
+        self.metadata
+            .schema()
+            .fields()
+            .iter()
+            .map(|field| format!("{}: {}", field.name(), field.data_type()))
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     pub fn total_rows(&self) -> usize {
@@ -298,7 +309,7 @@ impl ParquetPreview {
         self.load_view(0)
     }
 
-    pub fn from_file(path: &str, rows_per_view: usize) -> Result<Self, color_eyre::Report> {
+    pub fn from_file(path: &Path, rows_per_view: usize) -> Result<Self, color_eyre::Report> {
         let options = ArrowReaderOptions::new().with_page_index_policy(PageIndexPolicy::Optional);
         let metadata = ArrowReaderMetadata::load(&File::open(path)?, options)?;
         let schema = metadata.schema().clone();
@@ -330,7 +341,7 @@ impl ParquetPreview {
             .collect();
 
         let mut preview = ParquetPreview {
-            path: path.to_string(),
+            path: path.to_path_buf(),
             rows_per_view,
             metadata,
             row_group_starts,
