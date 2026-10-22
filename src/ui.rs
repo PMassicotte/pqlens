@@ -10,14 +10,18 @@ use ratatui::widgets::{Block, Cell, Clear, Paragraph, Row, Table, TableState};
 
 /// Render the UI with a table.
 pub fn render(frame: &mut Frame, app: &mut App) {
-    let layout = Layout::vertical([Constraint::Length(2), Constraint::Fill(1)]).spacing(1);
+    // Frame contains the whole drawable area with .area(), split that into the table and the status
+    // information areas
+    let layout = Layout::vertical([
+        Constraint::Length(2),
+        Constraint::Fill(1),
+        Constraint::Length(3),
+    ]);
 
-    let [top, main] = frame.area().layout(&layout);
+    let [header_area, table_area, info_area] = frame.area().layout(&layout);
 
     let title = Text::from(vec![
-        Line::from(
-            " Press 'q' or 'Esc' to quit, arrow keys to navigate, 's' to sort, '?' for keymaps",
-        ),
+        Line::from(" Press 'q' or 'Esc' to quit, arrow keys to navigate and '?' for keymaps"),
         Line::from(
             format!(
                 " Batch {}/{}: {} of {} rows in total",
@@ -31,9 +35,9 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         ),
     ]);
 
-    frame.render_widget(title.centered(), top);
-
-    render_table(frame, main, &mut app.table_state, &app.preview);
+    frame.render_widget(title.centered(), header_area);
+    render_table(frame, table_area, &mut app.table_state, &app.preview);
+    render_status(frame, info_area, app);
 
     if app.show_keymaps {
         render_keymaps(frame);
@@ -123,4 +127,22 @@ fn render_table(
         .cell_highlight_style(Style::new().reversed().yellow());
 
     frame.render_stateful_widget(table, area, table_state);
+}
+
+fn render_status(frame: &mut Frame, area: Rect, app: &App) {
+    let selected_column_idx = app.table_state.selected_column().unwrap_or(0);
+    let selected_column_name = app.preview.header()[selected_column_idx].clone();
+    let selected_column_type = app.preview.column_types()[selected_column_idx].clone();
+
+    let selected_column_info = format!("{selected_column_name} ({selected_column_type})");
+
+    let min_max = app.preview.column_min_max(selected_column_idx).map_or_else(
+        |_| selected_column_info.clone(),
+        |(min, max)| format!("{selected_column_info}: min: {min} / max: {max}"),
+    );
+
+    frame.render_widget(
+        Paragraph::new(min_max).block(Block::bordered().title("Selected column info")),
+        area,
+    );
 }
