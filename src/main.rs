@@ -16,7 +16,6 @@ use crossterm::event;
 #[derive(Parser)]
 #[command( version, long_about = None)]
 struct Cli {
-    #[arg(default_value = "./data/sample-users.parquet")]
     filename: PathBuf,
 
     /// Show schema only
