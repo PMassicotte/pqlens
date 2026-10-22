@@ -12,11 +12,13 @@ use ratatui::widgets::{Block, Cell, Clear, Paragraph, Row, Table, TableState};
 pub fn render(frame: &mut Frame, app: &mut App) {
     // Frame contains the whole drawable area with .area(), split that into the table and the status
     // information areas
-    let layout = Layout::vertical([Constraint::Length(2), Constraint::Fill(1)]).spacing(1);
-    let [header_area, main] = frame.area().layout(&layout);
+    let layout = Layout::vertical([
+        Constraint::Length(2),
+        Constraint::Fill(1),
+        Constraint::Length(3),
+    ]);
 
-    let [table_area, status_area] =
-        Layout::vertical([Constraint::Fill(1), Constraint::Length(3)]).areas(main);
+    let [header_area, table_area, info_area] = frame.area().layout(&layout);
 
     let title = Text::from(vec![
         Line::from(" Press 'q' or 'Esc' to quit, arrow keys to navigate and '?' for keymaps"),
@@ -35,7 +37,7 @@ pub fn render(frame: &mut Frame, app: &mut App) {
 
     frame.render_widget(title.centered(), header_area);
     render_table(frame, table_area, &mut app.table_state, &app.preview);
-    render_status(frame, status_area, app);
+    render_status(frame, info_area, app);
 
     if app.show_keymaps {
         render_keymaps(frame);
