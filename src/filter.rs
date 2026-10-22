@@ -57,7 +57,7 @@ pub fn matching_rows(column: &ArrayRef, value: &str) -> Result<UInt32Array, Arro
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use std::sync::Arc;
 
     use arrow::array::{ArrayRef, Int32Array, StringArray};

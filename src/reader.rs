@@ -452,3 +452,32 @@ fn format_rows(batch: &RecordBatch) -> Result<Vec<Vec<String>>, ArrowError> {
 
     Ok(rows)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::ParquetPreview;
+    use std::path::Path;
+
+    fn sample_preview() -> ParquetPreview {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("data/sample-users.parquet");
+        ParquetPreview::from_file(&path, 45).unwrap()
+    }
+
+    #[test]
+    fn min_max_on_sample_data_i64() {
+        let preview = sample_preview();
+
+        let min_max = preview.column_min_max(0).unwrap();
+
+        assert_eq!(min_max, ("1".to_string(), "1000".to_string()));
+    }
+
+    #[test]
+    fn min_max_on_sample_data_utf8() {
+        let preview = sample_preview();
+
+        let min_max = preview.column_min_max(4).unwrap();
+
+        assert_eq!(min_max, ("Beijing".to_string(), "Tokyo".to_string()));
+    }
+}
