@@ -134,11 +134,10 @@ fn render_status(frame: &mut Frame, area: Rect, app: &App) {
 
     let selected_column_info = format!("{selected_column_name} ({selected_column_type})");
 
-    let min_max = app
-        .preview
-        .column_min_max(selected_column_idx)
-        .map(|(min, max)| format!("{selected_column_info}: min: {min} / max: {max}"))
-        .unwrap();
+    let min_max = app.preview.column_min_max(selected_column_idx).map_or_else(
+        |_| selected_column_info.clone(),
+        |(min, max)| format!("{selected_column_info}: min: {min} / max: {max}"),
+    );
 
     frame.render_widget(
         Paragraph::new(min_max).block(Block::bordered().title("Selected column info")),
