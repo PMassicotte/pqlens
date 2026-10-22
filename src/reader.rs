@@ -8,6 +8,7 @@ use arrow::util::display::{ArrayFormatter, FormatOptions};
 use parquet::arrow::ProjectionMask;
 use parquet::arrow::arrow_reader::{
     ArrowReaderMetadata, ArrowReaderOptions, ParquetRecordBatchReaderBuilder,
+    statistics::StatisticsConverter,
 };
 use parquet::file::metadata::PageIndexPolicy;
 use std::fs::File;
@@ -52,6 +53,51 @@ impl ParquetPreview {
 
     pub fn total_rows(&self) -> usize {
         self.metadata.metadata().file_metadata().num_rows() as usize
+    }
+
+    pub fn column_min_max(&self, col: usize) -> Result<(String, String), color_eyre::Report> {
+        if self.metadata.metadata().num_row_groups() == 0 {
+            return Ok(("N/A".to_string(), "N/A".to_string()));
+        }
+
+        let sc = StatisticsConverter::try_new(
+            &self.header[col],
+            self.metadata.schema(),
+            self.metadata.parquet_schema(),
+        )?;
+
+        let mins = sc.row_group_mins(self.metadata.metadata().row_groups())?;
+        let maxes = sc.row_group_maxes(self.metadata.metadata().row_groups())?;
+
+        let min_idx = sort_to_indices(
+            &mins,
+            Some(SortOptions {
+                descending: false,
+                nulls_first: false,
+            }),
+            Some(1),
+        )?
+        .value(0);
+
+        let max_idx = sort_to_indices(
+            &maxes,
+            Some(SortOptions {
+                descending: true,
+                nulls_first: false,
+            }),
+            Some(1),
+        )?
+        .value(0);
+
+        let min_formatted = ArrayFormatter::try_new(&mins, &FormatOptions::default())?
+            .value(min_idx as usize)
+            .to_string();
+
+        let max_formatted = ArrayFormatter::try_new(&maxes, &FormatOptions::default())?
+            .value(max_idx as usize)
+            .to_string();
+
+        Ok((min_formatted, max_formatted))
     }
 
     // Number of rows when a filter is applied, otherwise the same as total_rows
