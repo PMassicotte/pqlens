@@ -73,6 +73,12 @@ mod test {
         let geometry = Geometry::from_wkb(&bytes);
 
         assert_eq!(geometry, Geometry::Point(Point { x: 1.0, y: 2.0 }));
+
+        let hex = "01010000000000000000c051c00000000000004540";
+        let bytes = hex_to_bytes(hex);
+        let geometry = Geometry::from_wkb(&bytes);
+
+        assert_eq!(geometry, Geometry::Point(Point { x: -71.0, y: 42.0 }));
     }
 
     #[test]
