@@ -1,5 +1,6 @@
 mod app;
 mod filter;
+mod geo;
 mod keymaps;
 mod reader;
 mod sorter;

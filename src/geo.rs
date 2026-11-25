@@ -14,6 +14,7 @@ pub(crate) enum Geometry {
     Point(Point),
     LineString(LineString),
     Polygon(Polygon),
+    UnimplementedType(u32),
 }
 
 impl Geometry {
@@ -32,7 +33,7 @@ impl Geometry {
             1 => Point::read(reader).into(),
             2 => LineString::read(reader).into(),
             3 => Polygon::read(reader).into(),
-            _ => unimplemented!(),
+            other => Geometry::UnimplementedType(other),
         }
     }
 }

@@ -1,5 +1,8 @@
 use crate::filter;
+use crate::geo::Geometry;
 use crate::sorter::{SortDir, SortState};
+use arrow::array::Array;
+use arrow::array::AsArray;
 use arrow::array::{ArrayRef, RecordBatch, RecordBatchReader, UInt32Array};
 use arrow::compute::{SortOptions, concat_batches, sort_to_indices};
 use arrow::compute::{partition, take};
@@ -11,6 +14,7 @@ use parquet::arrow::arrow_reader::{
     statistics::StatisticsConverter,
 };
 use parquet::file::metadata::PageIndexPolicy;
+use serde_json::Value;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 
@@ -18,6 +22,11 @@ use arrow::compute::take_record_batch;
 use parquet::arrow::arrow_reader::RowSelection;
 
 const VIEWS_PER_CHUNK: usize = 100;
+
+#[derive(Debug)]
+struct GeoInfo {
+    encoding: String,
+}
 
 pub struct ParquetPreview {
     path: PathBuf,
@@ -28,6 +37,7 @@ pub struct ParquetPreview {
     chunk_idx: Option<usize>,
     header: Vec<String>,
     column_types: Vec<String>,
+    geo_info: Vec<Option<GeoInfo>>,
     rows: Vec<Vec<String>>,
     view: RecordBatch,
     sorted_idx: Option<UInt32Array>,
@@ -272,7 +282,7 @@ impl ParquetPreview {
         };
 
         self.current_view = idx;
-        self.rows = format_rows(&self.view)?;
+        self.rows = format_rows(&self.view, &self.geo_info)?;
 
         Ok(())
     }
@@ -380,7 +390,16 @@ impl ParquetPreview {
 
     pub fn from_file(path: &Path, rows_per_view: usize) -> Result<Self, color_eyre::Report> {
         let options = ArrowReaderOptions::new().with_page_index_policy(PageIndexPolicy::Optional);
-        let metadata = ArrowReaderMetadata::load(&File::open(path)?, options)?;
+
+        // Try to load the arrow with the Arrow metadata, use the parquet metadata otherwise
+        let metadata = ArrowReaderMetadata::load(&File::open(path)?, options).or_else(|_| {
+            let options = ArrowReaderOptions::new()
+                .with_page_index_policy(PageIndexPolicy::Optional)
+                .with_skip_arrow_metadata(true);
+
+            ArrowReaderMetadata::load(&File::open(path)?, options)
+        })?;
+
         let schema = metadata.schema().clone();
 
         // Precompute the starting row index of each row group for later use in determining which
@@ -409,6 +428,35 @@ impl ParquetPreview {
             .map(|f| f.data_type().to_string())
             .collect();
 
+        // Check for geo information in the parquet footer
+        let geo_columns: Option<Value> = metadata
+            .metadata()
+            .file_metadata()
+            .key_value_metadata()
+            .and_then(|kvs| kvs.iter().find(|kv| kv.key == "geo"))
+            .and_then(|kv| kv.value.as_deref())
+            .and_then(|json| serde_json::from_str::<Value>(json).ok())
+            .and_then(|parsed| parsed.get("columns").cloned());
+
+        let mut geo_info: Vec<Option<GeoInfo>> = Vec::new();
+
+        for field in schema.fields() {
+            match &geo_columns {
+                Some(cols) => match cols.get(field.name()) {
+                    Some(b) => match b.get("encoding").and_then(|e| e.as_str()) {
+                        Some(enc) => geo_info.push(Some(GeoInfo {
+                            encoding: enc.to_string(),
+                        })),
+                        None => geo_info.push(None),
+                    },
+                    None => geo_info.push(None),
+                },
+                None => {
+                    geo_info.push(None);
+                }
+            }
+        }
+
         let mut preview = ParquetPreview {
             path: path.to_path_buf(),
             rows_per_view,
@@ -418,6 +466,7 @@ impl ParquetPreview {
             chunk_idx: None,
             header,
             column_types,
+            geo_info,
             rows: Vec::new(),
             view: RecordBatch::new_empty(schema),
             sorted_idx: None,
@@ -432,7 +481,30 @@ impl ParquetPreview {
     }
 }
 
-fn format_rows(batch: &RecordBatch) -> Result<Vec<Vec<String>>, ArrowError> {
+// 1. Get the column index with enumerate
+//
+// Change formatters.iter() to formatters.iter().enumerate(). The closure then receives a pair, (col_index, formatter), instead of just formatter.
+//
+// 2. Inside the closure, use col_index to decide
+//
+// - Is geo_info[col_index] a WKB geometry? If yes:
+//   - batch.column(col_index) gives the column's array,
+//   - .as_binary::<i32>() turns it into a binary array (import the AsArray trait for this),
+//   - if .is_null(row_index), return an empty string,
+//   - otherwise .value(row_index) gives the &[u8], so call your geo.rs decoder with it.
+// - Otherwise: formatter.value(row_index).to_string(), exactly as now.
+//
+//  Not every column is WKB. In GeoParquet 1.1, the encoding your geo_info stores can be "WKB" or a
+//  native GeoArrow encoding like "point" or "polygon". Those native encodings are Arrow struct and
+//  list columns, not binary. Only take the as_binary path when the  encoding is "WKB".
+
+//
+// https://geoparquet.org/releases/v1.1.0/
+
+fn format_rows(
+    batch: &RecordBatch,
+    geo_info: &[Option<GeoInfo>],
+) -> Result<Vec<Vec<String>>, ArrowError> {
     let format_options = FormatOptions::default();
 
     let formatters: Vec<_> = batch
@@ -445,7 +517,55 @@ fn format_rows(batch: &RecordBatch) -> Result<Vec<Vec<String>>, ArrowError> {
         .map(|row_index| {
             formatters
                 .iter()
-                .map(|formatter| formatter.value(row_index).to_string())
+                .enumerate()
+                .map(|(col_index, formatter)| {
+                    eprintln!("Encoding: {:?}", geo_info[col_index]);
+                    if let Some(geo) = &geo_info[col_index]
+                        && geo.encoding == "WKB"
+                    {
+                        let Some(array) = batch.column(col_index).as_binary_opt::<i32>() else {
+                            return formatter.value(row_index).to_string(); // not Binary: show as-is
+                        };
+
+                        if array.is_null(row_index) {
+                            return String::new();
+                        }
+
+                        let wkb: &[u8] = array.value(row_index);
+                        let geom = Geometry::from_wkb(wkb);
+
+                        match geom {
+                            Geometry::Point(p) => format!("POINT({} {})", p.x, p.y),
+                            Geometry::LineString(ls) => {
+                                let coords: Vec<String> = ls
+                                    .points
+                                    .iter()
+                                    .map(|p| format!("{} {}", p.x, p.y))
+                                    .collect();
+                                format!("LINESTRING({})", coords.join(", "))
+                            }
+                            Geometry::Polygon(poly) => {
+                                let rings: Vec<String> = poly
+                                    .rings
+                                    .iter()
+                                    .map(|ring| {
+                                        let coords: Vec<String> = ring
+                                            .iter()
+                                            .map(|p| format!("{} {}", p.x, p.y))
+                                            .collect();
+                                        format!("({})", coords.join(", "))
+                                    })
+                                    .collect();
+                                format!("POLYGON({})", rings.join(", "))
+                            }
+                            Geometry::UnimplementedType(ty) => {
+                                format!("Unsupported geometry type {ty}")
+                            }
+                        }
+                    } else {
+                        formatter.value(row_index).to_string()
+                    }
+                })
                 .collect()
         })
         .collect();
